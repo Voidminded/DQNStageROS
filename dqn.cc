@@ -42,12 +42,9 @@ typedef struct
     whenever the model is updated by Stage.
 */
 
-void execAction( robot_t* robot, int action)
+void execAction( robot_t* robot, int forward, int turn)
 {
-    if( action)
-        robot->position->SetSpeed( 0.3, 0, 0.06*action);
-    else
-        robot->position->SetSpeed( 0, 0, 0);
+  robot->position->SetSpeed( 0.3*forward, 0, 0.06*turn);
 }
 
 int LaserUpdate( ModelRanger* mod, robot_t* robot)
