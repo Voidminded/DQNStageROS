@@ -58,18 +58,20 @@ int LaserUpdate( ModelRanger* mod, robot_t* robot)
         return 0;
     else
     {
-	robot->laserMap = Scalar( 0, 0, 0);
-	int x = 60, y = 60;
-	for( int i = 0; i < 360; i++)
+	robot->laserMap = Scalar( 128, 128, 128);
+	int x = 60, y = 60, rad = 60;
+	int dir = 180*robot->position->GetGlobalPose().a/PI;
+  for( int ind = 0; ind < 360; ind++)
 	{
-	    for( int xx = min( 60, x + int( 10*scan[i]*cos( PI*i/180))); xx < max( 60, x + int( 10*scan[i]*cos( PI*i/180))); xx++)
-		for( int yy = min(60, y + int( 10*scan[i]*sin( PI*i/180))); yy < max(60, y + int( 10*scan[i]*sin( PI*i/180))); yy++)
-	    	    robot->laserMap.data[ 120 * xx + yy] = 255;	
+    int i = ind + dir;
+    for( int j = 0; j < rad; j++)
+      if( scan[ind]*10>=j)
+        robot->laserMap.data[ 120 *(x+ int( j*cos( PI*i/180))) + y + int( j*sin( PI*i/180))] = 255;
+    if( scan[ind] < 6)
+      robot->laserMap.data[ 120 *(x+ int( 10*scan[ind]*cos( PI*i/180))) + y + int( 10*scan[ind]*sin( PI*i/180))] = 0;
 	}
-//	cout << scan[0] << endl;
-	imwrite("test.jpg", robot->laserMap);
 	imshow( "Laser", robot->laserMap);
-  execAction( robot, -1);
+//  execAction( robot, -1);
 	waitKey(1);
     }
     return 0;
