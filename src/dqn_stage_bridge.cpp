@@ -4,14 +4,19 @@
 DQNStageBridge::DQNStageBridge(ros::NodeHandle& nh)
   :nh_(nh),
     it(nh_),
-    laser_sub_(nh_.subscribe("base_scan", 30, &DQNStageBridge::generateOccupancyGridCallBack, this)),
-    odom_sub_(nh_.subscribe("base_pose_ground_truth", 30, &DQNStageBridge::updateRobotPoseCallBack, this))
+    sub_laser_(nh_.subscribe("base_scan", 1, &DQNStageBridge::generateOccupancyGridCB, this)),
+    sub_odom_(nh_.subscribe("base_pose_ground_truth", 1, &DQNStageBridge::updateRobotPoseCB, this)),
+    sub_action_(nh_.subscribe("dqn/selected_action", 10, &DQNStageBridge::actionGeneratorCB, this)),
+    pub_goal_(nh_.advertise<geometry_msgs::Pose>("bridge/goal_pose", 1, true)),
+    pub_cur_pose_(nh_.advertise<geometry_msgs::Pose>("bridge/current_pose", 1, true)),
+    pub_cur_rot_(nh_.advertise<std_msgs::Float32>("bridge/current_direction", 1, true)),
+    pub_cmd_vel_(nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1, true))
 {
-  pub_laser_iamge_ = it.advertise("laser_image", 1);
+  pub_laser_image_ = it.advertise("bridge/laser_image", 1);
   laserMap.create( 120, 120, CV_8U);
 }
 
-void DQNStageBridge::generateOccupancyGridCallBack(const sensor_msgs::LaserScanConstPtr &scan)
+void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPtr &scan)
 {
   if( scan->ranges.size() < 1)
     return;
@@ -19,9 +24,7 @@ void DQNStageBridge::generateOccupancyGridCallBack(const sensor_msgs::LaserScanC
     {
       laserMap = Scalar( 128, 128, 128);
       int x = scan->range_max* 10, y = scan->range_max*10, rad = scan->range_max*10;
-      tf::Pose p;
-      tf::poseMsgToTF(robotPose, p);
-      int dir = 180*tf::getYaw(p.getRotation())/PI;
+      int dir = (int)robotRot;
       for( float ind = 0; ind < 360; ind++)
         {
           int i = ind + dir;
@@ -32,13 +35,43 @@ void DQNStageBridge::generateOccupancyGridCallBack(const sensor_msgs::LaserScanC
             laserMap.data[ (int)scan->range_max*20 *(x+ int( 10*scan->ranges.at(ind)*cos( PI*i/180))) + y + int( 10*scan->ranges.at(ind)*sin( PI*i/180))] = 0;
         }
       sensor_msgs::ImagePtr laserImageMSG = cv_bridge::CvImage(std_msgs::Header(), "mono8", laserMap).toImageMsg();
-      pub_laser_iamge_.publish( laserImageMSG);
+      pub_laser_image_.publish( laserImageMSG);
     }
 }
 
-void DQNStageBridge::updateRobotPoseCallBack(const nav_msgs::OdometryConstPtr &odom)
+void DQNStageBridge::updateRobotPoseCB(const nav_msgs::OdometryConstPtr &odom)
 {
   robotPose = odom->pose.pose;
+  tf::Pose p;
+  tf::poseMsgToTF(robotPose, p);
+  robotRot = 180*tf::getYaw(p.getRotation())/PI;
+  //ROS_INFO("[BRDG] Rboto orientation: %g", robotRot);
+}
+
+/********************************************
+ * Considering 3 forward speed, 3 rotational speed for each direction, + stop for each
+ * Forward: [0, 0.3, 0.6, 0.9]
+ * Rotational: [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9]
+ * Thus action space is 4*7=28 actions [0, 27]
+ * ******************************************/
+void DQNStageBridge::actionGeneratorCB(const std_msgs::Int8ConstPtr &act)
+{
+  if( act->data < 0 || act->data > 27)
+  {
+    ROS_WARN("Invalid action %d", act->data);
+    return;
+  }
+  double w = ((act->data%7)-3)/3.0;
+  double f = 0.3*(act->data/7);
+  geometry_msgs::Twist msg;
+  msg.angular.x = 0;
+  msg.angular.y = 0;
+  msg.angular.z = w;
+  msg.linear.x = f;
+  msg.linear.y = 0;
+  msg.linear.z = 0;
+  pub_cmd_vel_.publish( msg);
+  //ROS_INFO("Action %d received, x: %g w: %g", act->data, f, w);
 }
 
 void DQNStageBridge::SpinOnce()
@@ -64,7 +97,7 @@ void DQNStageBridge::Spin()
 
 int main(int argc, char* argv[])
 {
-  ros::init(argc, argv, "dqn_stage_bridge");
+  ros::init(argc, argv, "dqn_stage_bridge_node");
   ros::NodeHandle nh;
   DQNStageBridge bridge_node(nh);
   ROS_INFO("[BRDG] Bridge node initialized...");
