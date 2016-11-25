@@ -1,4 +1,4 @@
-# DQNROSStage
+# DQNStageROS
 
 Implement DQN in Stage simulator in ROS for Deep Reinforcement Learning using Google DeepMind.
 
