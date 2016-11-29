@@ -6,8 +6,8 @@ include "pioneer.inc"
 include "map.inc"
 include "sick.inc"
 
-paused 			1
-speedup 		3.000
+paused 			0
+speedup 		-1
 show_clock 	1
 show_clock_interval 100
 resolution 	0.2
