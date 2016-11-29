@@ -60,7 +60,7 @@ define agent pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
   gui_nose 0
   laser_return 1
   obstacle_return 1
-  sicklaser( 
+  sicklaser(
 	pose [ 0 0 0 0 ] 
 	) 
 )
