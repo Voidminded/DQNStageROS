@@ -74,11 +74,11 @@ flags.DEFINE_float('gamma', 0.99, 'Discount factor of return')
 flags.DEFINE_float('beta', 0.01, 'Beta of RMSProp optimizer')
 
 # Debug
-flags.DEFINE_boolean('display', False, 'Whether to do display the game screen or not')
+flags.DEFINE_boolean('display', True, 'Whether to do display the game screen or not')
 flags.DEFINE_string('log_level', 'INFO', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
 flags.DEFINE_integer('random_seed', 123, 'Value of random seed')
 flags.DEFINE_string('tag', '', 'The name of tag for a model, only for debugging')
-flags.DEFINE_string('gpu_fraction', '1/1', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
+flags.DEFINE_string('gpu_fraction', '1/2', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
 
 
 def calc_gpu_fraction(fraction_string):
@@ -111,13 +111,13 @@ class StageEnvironment(object):
                observation_dims, data_format, display):
     
     self.max_random_start = max_random_start
-    self.action_size = 27
+    self.action_size = 28
 
     self.display = display
     self.data_format = data_format
     self.observation_dims = observation_dims
 
-    self.screen = np.zeros((observation_dims,observation_dims,1), np.uint8)
+    self.screen = np.zeros((self.observation_dims[0],self.observation_dims[1],1), np.uint8)
     
     #####################
     # Followings are not used yet
@@ -129,15 +129,15 @@ class StageEnvironment(object):
     self.sentTime = 0
     #####################
 
-    self.pose.x = 0.0
-    self.pose.y = 0.0
-    self.prevPose.x = 0.0
-    self.prevPose.y = 0.0
-    self.goal.x = 0.0
-    self.goal.y = 0.0
+    self.poseX = 0.0
+    self.poseY = 0.0
+    self.prevPoseX = 0.0
+    self.prevPoseY = 0.0
+    self.goalX = 0.0
+    self.goalY = 0.0
     self.dir = 0.0
     self.prevDist = 0.0
-    self.terminal =False
+    self.terminal = 0
 
     rospy.wait_for_service('reset_positions')
     self.resetStage = rospy.ServiceProxy('reset_positions', EmptySrv)
@@ -147,17 +147,17 @@ class StageEnvironment(object):
     self.pub_new_goal_ = rospy.Publisher("dqn/new_goal",EmptyMsg,queue_size=1)
     
     # Subscribers:
-    rospy.Subscriber('bridge/laser_image', Image, self.laserCB)
-    rospy.Subscriber('bridge/current_dir', Float32, self.directionCB)
-    rospy.Subscriber('bridge/impact', EmptyMsg, self.impactCB)
-    rospy.Subscriber('bridge/current_pose', Pose, self.positionCB)
-    rospy.Subscriber('bridge/goal_pose', Pose, self.targetCB)
+    rospy.Subscriber('bridge/laser_image', Image, self.laserCB,queue_size=1)
+    rospy.Subscriber('bridge/current_dir', Float32, self.directionCB,queue_size=1)
+    rospy.Subscriber('bridge/impact', EmptyMsg, self.impactCB,queue_size=1)
+    rospy.Subscriber('bridge/current_pose', Pose, self.positionCB,queue_size=1)
+    rospy.Subscriber('bridge/goal_pose', Pose, self.targetCB,queue_size=1)
 
   
   
   def new_game(self):
     self.resetStage()
-    self.terminal = False
+    self.terminal = 0
     cv2.waitKey(30)
     return self.preprocess(), 0, False
 
@@ -167,30 +167,33 @@ class StageEnvironment(object):
     return self.new_game()
 
   def step(self, action, is_training=False):
-    self.prevPose.x = self.pose.x
-    self.prevPose.y = self.pose.y
+    self.prevPoseX = self.poseX
+    self.prevPoseY = self.poseY
 
     if action == -1:
       # Step with random action
-      action = int(random.random()*(self.action_size+1))
+      action = int(random.random()*(self.action_size))
 
     msg = Int8()
     msg.data = action
     self.pub_action_.publish( msg)
 
+    if self.display:
+      cv2.imshow("Screen", self.screen)
     cv2.waitKey(9)
 
-    dist = (self.pose.x - self.prevPose.x)**2 + (self.pose.y - self.prevPose.y)**2
+    dist = (self.poseX - self.goalX)**2 + (self.poseY - self.goalY)**2
     reward = self.prevDist - dist
     self.prevDist = dist
 
-    if self.terminal:
+    if self.terminal == 1:
       reward -= -90
+      self.new_random_game()
 
     if dist < 0.3:
       reward += 90
       newStateMSG = EmptyMsg()
-      self.pub_new_goal_( newStateMSG)
+      self.pub_new_goal_.publish( newStateMSG)
       # cv2.waitKey(30)
 
     # Add whatever info you want
@@ -205,25 +208,23 @@ class StageEnvironment(object):
 
   def laserCB(self, data):
     try:
-      self.screen = bridge.imgmsg_to_cv2(data, "mono8")
+      self.screen = np.squeeze(bridge.imgmsg_to_cv2(data, "mono8"))
     except CvBridgeError as e:
       print(e)
-    if self.display:
-      cv2.imshow("Screen", screen)
 
   def directionCB(self, data):
     self.dir = data
 
   def positionCB( self, data):
-    self.pose.x = data.position.x
-    self.pose.y = data.position.y
+    self.poseX = data.position.x
+    self.poseY = data.position.y
 
   def targetCB( self, data):
-    self.gaol.x = data.position.x
-    self.goal.y = data.position.y
+    self.goalX = data.position.x
+    self.goalY = data.position.y
 
   def impactCB( self, data):
-    self.terminal = data
+    self.terminal = 1
 
 
 def main(_):
@@ -255,28 +256,28 @@ def main(_):
                          data_format=conf.data_format,
                          history_length=conf.history_length,
                          observation_dims=conf.observation_dims,
-                         output_size=env.action_space.n,
+                         output_size=env.action_size,
                          network_header_type=conf.network_header_type,
                          name='pred_network', trainable=True)
       target_network = CNN(sess=sess,
                            data_format=conf.data_format,
                            history_length=conf.history_length,
                            observation_dims=conf.observation_dims,
-                           output_size=env.action_space.n,
+                           output_size=env.action_size,
                            network_header_type=conf.network_header_type,
                            name='target_network', trainable=False)
     elif conf.network_header_type == 'mlp':
       pred_network = MLPSmall(sess=sess,
                               observation_dims=conf.observation_dims,
                               history_length=conf.history_length,
-                              output_size=env.action_space.n,
+                              output_size=env.action_size,
                               hidden_activation_fn=tf.sigmoid,
                               network_output_type=conf.network_output_type,
                               name='pred_network', trainable=True)
       target_network = MLPSmall(sess=sess,
                                 observation_dims=conf.observation_dims,
                                 history_length=conf.history_length,
-                                output_size=env.action_space.n,
+                                output_size=env.action_size,
                                 hidden_activation_fn=tf.sigmoid,
                                 network_output_type=conf.network_output_type,
                                 name='target_network', trainable=False)

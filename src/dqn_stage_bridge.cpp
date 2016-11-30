@@ -7,13 +7,23 @@ DQNStageBridge::DQNStageBridge(ros::NodeHandle& nh)
     sub_laser_(nh_.subscribe("base_scan", 1, &DQNStageBridge::generateOccupancyGridCB, this)),
     sub_odom_(nh_.subscribe("base_pose_ground_truth", 1, &DQNStageBridge::updateRobotPoseCB, this)),
     sub_action_(nh_.subscribe("dqn/selected_action", 10, &DQNStageBridge::actionGeneratorCB, this)),
+    sub_new_goal_(nh_.subscribe("dqn/new_goal", 1, &DQNStageBridge::selectGoalCB, this)),
     pub_goal_(nh_.advertise<geometry_msgs::Pose>("bridge/goal_pose", 1, true)),
     pub_cur_pose_(nh_.advertise<geometry_msgs::Pose>("bridge/current_pose", 1, true)),
     pub_cur_rot_(nh_.advertise<std_msgs::Float32>("bridge/current_direction", 1, true)),
-    pub_cmd_vel_(nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1, true))
+    pub_cmd_vel_(nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1, true)),
+    pub_impact_(nh_.advertise<std_msgs::Empty>("bridge/impact", 10, true))
 {
   pub_laser_image_ = it.advertise("bridge/laser_image", 1);
-  laserMap.create( 120, 120, CV_8U);
+  laserMap.create( 80, 80, CV_8U);
+}
+
+double DQNStageBridge::constrainAngle(double x)
+{
+    x = fmod(x + 180,360);
+    if (x < 0)
+        x += 360;
+    return x - 180;
 }
 
 void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPtr &scan)
@@ -24,16 +34,34 @@ void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPt
     {
       laserMap = Scalar( 128, 128, 128);
       int x = scan->range_max* 10, y = scan->range_max*10, rad = scan->range_max*10;
-      int dir = (int)robotRot;
+      int dir = 0 ;//(int)robotRot.data;
       for( float ind = 0; ind < 360; ind++)
+      {
+        int i = ind + dir;
+        for( int j = 0; j < rad; j++)
+          if( scan->ranges.at(ind)*10>=j)
+            laserMap.data[ 80 *(x+ int( j*cos( PI*i/180))) + y + int( j*sin( PI*i/180))] = 255;
+        if( scan->ranges.at(ind) < scan->range_max)
+          laserMap.data[ 80 *(x+ int( 10*scan->ranges.at(ind)*cos( PI*i/180))) + y + int( 10*scan->ranges.at(ind)*sin( PI*i/180))] = 0;
+        if( scan->ranges.at(ind) < 0.6)
         {
-          int i = ind + dir;
-          for( int j = 0; j < rad; j++)
-            if( scan->ranges.at(ind)*10>=j)
-              laserMap.data[ (int)scan->range_max *20 *(x+ int( j*cos( PI*i/180))) + y + int( j*sin( PI*i/180))] = 255;
-          if( scan->ranges.at(ind) < 6)
-            laserMap.data[ (int)scan->range_max*20 *(x+ int( 10*scan->ranges.at(ind)*cos( PI*i/180))) + y + int( 10*scan->ranges.at(ind)*sin( PI*i/180))] = 0;
+          std_msgs::Empty boom;
+          pub_impact_.publish( boom);
         }
+      }
+      for( int i = rad; i < 80; i++)
+      {
+        int stir = (dirToTarget*40/180)+40;
+        int minStir = min( 40, stir);
+        int maxStir = max( 40, stir);
+        for( int j = 0; j < 80; j++)
+        {
+          if( j >= minStir && j <= maxStir)
+            laserMap.data[ i, j] = 0;
+          else
+            laserMap.data[ i, j] = 255;
+        }
+      }
       sensor_msgs::ImagePtr laserImageMSG = cv_bridge::CvImage(std_msgs::Header(), "mono8", laserMap).toImageMsg();
       pub_laser_image_.publish( laserImageMSG);
     }
@@ -42,10 +70,16 @@ void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPt
 void DQNStageBridge::updateRobotPoseCB(const nav_msgs::OdometryConstPtr &odom)
 {
   robotPose = odom->pose.pose;
-  tf::Pose p;
-  tf::poseMsgToTF(robotPose, p);
-  robotRot = 180*tf::getYaw(p.getRotation())/PI;
-  //ROS_INFO("[BRDG] Rboto orientation: %g", robotRot);
+  tf::Pose pos;
+  tf::poseMsgToTF(robotPose, pos);
+  robotRot.data = 180.0*tf::getYaw(pos.getRotation())/PI;
+  double angleBetween = 180.0*atan2(goalPose.position.y - robotPose.position.y, goalPose.position.x - robotPose.position.x)/PI;
+  dirToTarget = DQNStageBridge::constrainAngle(robotRot.data - angleBetween);
+//  ROS_INFO("[BRDG] Rboto orientation: %g angle between: %g", robotRot.data, angleBetween);
+//  ROS_INFO("[BRDG] Dir to Target: %g", dirToTarget);
+  pub_cur_pose_.publish( robotPose);
+  pub_cur_rot_.publish( robotRot);
+  pub_goal_.publish( goalPose);
 }
 
 /********************************************
@@ -93,6 +127,16 @@ void DQNStageBridge::Spin()
       // }
     }
 
+}
+
+void DQNStageBridge::selectGoalCB(const std_msgs::EmptyConstPtr &msg)
+{
+  double theta = double(rand())/RAND_MAX;
+  double r = rand()%21;
+  goalPose.position.x = 0;// r*cos(theta);
+  goalPose.position.y = 0;//r*sin(theta);
+  ROS_INFO("Selected new goal : %g, %g", goalPose.position.x, goalPose.position.y);
+  pub_goal_.publish( goalPose);
 }
 
 int main(int argc, char* argv[])
