@@ -29,15 +29,15 @@ flags = tf.app.flags
 flags.DEFINE_boolean('use_gpu', True, 'Whether to use gpu or not. gpu use NHWC and gpu use NCHW for data_format')
 flags.DEFINE_string('agent_type', 'DQN', 'The type of agent [DQN]')
 flags.DEFINE_boolean('double_q', False, 'Whether to use double Q-learning')
-flags.DEFINE_string('network_header_type', 'nips', 'The type of network header [mlp, nature, nips]')
+flags.DEFINE_string('network_header_type', 'nature', 'The type of network header [mlp, nature, nips]')
 flags.DEFINE_string('network_output_type', 'normal', 'The type of network output [normal, dueling]')
 
 # Environment
 flags.DEFINE_string('env_name', 'Stage', 'The name of gym environment to use')
 flags.DEFINE_integer('max_random_start', 30, 'The maximum number of NOOP actions at the beginning of an episode')
 flags.DEFINE_integer('history_length', 4, 'The length of history of observation to use as an input to DQN')
-flags.DEFINE_integer('max_r', +1000, 'The maximum value of clipped reward')
-flags.DEFINE_integer('min_r', -1000, 'The minimum value of clipped reward')
+flags.DEFINE_integer('max_r', +9000, 'The maximum value of clipped reward')
+flags.DEFINE_integer('min_r', -9000, 'The minimum value of clipped reward')
 flags.DEFINE_string('observation_dims', '[80, 80]', 'The dimension of gym observation')
 flags.DEFINE_boolean('random_start', True, 'Whether to start with random state')
 
