@@ -6,13 +6,13 @@ DQNStageBridge::DQNStageBridge(ros::NodeHandle& nh)
     it(nh_),
     sub_laser_(nh_.subscribe("base_scan", 1, &DQNStageBridge::generateOccupancyGridCB, this)),
     sub_odom_(nh_.subscribe("base_pose_ground_truth", 1, &DQNStageBridge::updateRobotPoseCB, this)),
-    sub_action_(nh_.subscribe("dqn/selected_action", 10, &DQNStageBridge::actionGeneratorCB, this)),
+    sub_action_(nh_.subscribe("dqn/selected_action", 1, &DQNStageBridge::actionGeneratorCB, this)),
     sub_new_goal_(nh_.subscribe("dqn/new_goal", 1, &DQNStageBridge::selectGoalCB, this)),
     pub_goal_(nh_.advertise<geometry_msgs::Pose>("bridge/goal_pose", 1, true)),
     pub_cur_pose_(nh_.advertise<geometry_msgs::Pose>("bridge/current_pose", 1, true)),
     pub_cur_rot_(nh_.advertise<std_msgs::Float32>("bridge/current_direction", 1, true)),
     pub_cmd_vel_(nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1, true)),
-    pub_impact_(nh_.advertise<std_msgs::Empty>("bridge/impact", 10, true))
+    pub_impact_(nh_.advertise<std_msgs::Empty>("bridge/impact", 1, true))
 {
   pub_laser_image_ = it.advertise("bridge/laser_image", 1);
   laserMap.create( 80, 80, CV_8U);
@@ -35,6 +35,7 @@ void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPt
       laserMap = Scalar( 128, 128, 128);
       int x = scan->range_max* 10, y = scan->range_max*10, rad = scan->range_max*10;
       int dir = 0 ;//(int)robotRot.data;
+      bool boomed = false;
       for( float ind = 0; ind < 360; ind++)
       {
         int i = ind + dir;
@@ -43,13 +44,15 @@ void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPt
             laserMap.data[ 80 *(x+ int( j*cos( PI*i/180))) + y + int( j*sin( PI*i/180))] = 255;
         if( scan->ranges.at(ind) < scan->range_max)
           laserMap.data[ 80 *(x+ int( 10*scan->ranges.at(ind)*cos( PI*i/180))) + y + int( 10*scan->ranges.at(ind)*sin( PI*i/180))] = 0;
-        if( scan->ranges.at(ind) < 0.6)
-        {
-          std_msgs::Empty boom;
-          pub_impact_.publish( boom);
-        }
+        if( scan->ranges.at(ind) < 0.66)
+          boomed = true;
       }
-      for( int i = rad; i < 80; i++)
+      if( boomed)
+      {
+        std_msgs::Empty boom;
+        pub_impact_.publish( boom);
+      }
+      for( int i = rad*2; i < 80; i++)
       {
         int stir = (dirToTarget*40/180)+40;
         int minStir = min( 40, stir);
@@ -57,9 +60,21 @@ void DQNStageBridge::generateOccupancyGridCB(const sensor_msgs::LaserScanConstPt
         for( int j = 0; j < 80; j++)
         {
           if( j >= minStir && j <= maxStir)
-            laserMap.data[ i, j] = 0;
+            laserMap.at<uchar>(i,j) = 0;
           else
-            laserMap.data[ i, j] = 255;
+            laserMap.at<uchar>(i,j) = 255;
+        }
+      }
+      for( int j = rad*2; j < 80; j++)
+      {
+        double dist = sqrt( pow(robotPose.position.x - goalPose.position.x, 2) + pow( robotPose.position.y - goalPose.position.y, 2));
+        int normDist = 72 * dist / Map_Max_Dist;
+        for( int i = 0; i < 72; i++)
+        {
+          if( i <= normDist)
+            laserMap.at<uchar>(i,j) = 0;
+          else
+            laserMap.at<uchar>(i,j) = 255;
         }
       }
       sensor_msgs::ImagePtr laserImageMSG = cv_bridge::CvImage(std_msgs::Header(), "mono8", laserMap).toImageMsg();
@@ -133,8 +148,8 @@ void DQNStageBridge::selectGoalCB(const std_msgs::EmptyConstPtr &msg)
 {
   double theta = double(rand())/RAND_MAX;
   double r = rand()%21;
-  goalPose.position.x = 0;// r*cos(theta);
-  goalPose.position.y = 0;//r*sin(theta);
+  goalPose.position.x = r*cos(theta);
+  goalPose.position.y = r*sin(theta);
   ROS_INFO("Selected new goal : %g, %g", goalPose.position.x, goalPose.position.y);
   pub_goal_.publish( goalPose);
 }

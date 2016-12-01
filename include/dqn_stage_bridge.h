@@ -15,6 +15,8 @@
 
 #define PI 3.14159265359
 
+#define Map_Max_Dist 40.0
+
 using namespace cv;
 
 class DQNStageBridge{

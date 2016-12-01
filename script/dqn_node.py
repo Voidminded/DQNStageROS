@@ -36,8 +36,8 @@ flags.DEFINE_string('network_output_type', 'normal', 'The type of network output
 flags.DEFINE_string('env_name', 'Stage', 'The name of gym environment to use')
 flags.DEFINE_integer('max_random_start', 30, 'The maximum number of NOOP actions at the beginning of an episode')
 flags.DEFINE_integer('history_length', 4, 'The length of history of observation to use as an input to DQN')
-flags.DEFINE_integer('max_r', +100, 'The maximum value of clipped reward')
-flags.DEFINE_integer('min_r', -100, 'The minimum value of clipped reward')
+flags.DEFINE_integer('max_r', +1000, 'The maximum value of clipped reward')
+flags.DEFINE_integer('min_r', -1000, 'The minimum value of clipped reward')
 flags.DEFINE_string('observation_dims', '[80, 80]', 'The dimension of gym observation')
 flags.DEFINE_boolean('random_start', True, 'Whether to start with random state')
 
@@ -78,7 +78,7 @@ flags.DEFINE_boolean('display', True, 'Whether to do display the game screen or 
 flags.DEFINE_string('log_level', 'INFO', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
 flags.DEFINE_integer('random_seed', 123, 'Value of random seed')
 flags.DEFINE_string('tag', '', 'The name of tag for a model, only for debugging')
-flags.DEFINE_string('gpu_fraction', '1/2', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
+flags.DEFINE_string('gpu_fraction', '2/3', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
 
 
 def calc_gpu_fraction(fraction_string):
@@ -156,8 +156,11 @@ class StageEnvironment(object):
   
   
   def new_game(self):
+    rospy.wait_for_service('reset_positions')
     self.resetStage()
     self.terminal = 0
+    #newStateMSG = EmptyMsg()
+    #self.pub_new_goal_.publish( newStateMSG)
     cv2.waitKey(30)
     return self.preprocess(), 0, False
 
@@ -183,14 +186,14 @@ class StageEnvironment(object):
     cv2.waitKey(9)
 
     dist = (self.poseX - self.goalX)**2 + (self.poseY - self.goalY)**2
-    reward = self.prevDist - dist
+    reward = (self.prevDist - dist)/10.0
     self.prevDist = dist
 
     if self.terminal == 1:
-      reward -= -90
-      self.new_random_game()
+      reward -= 900
+      #self.new_random_game()
 
-    if dist < 0.3:
+    if dist < 0.9:
       reward += 90
       newStateMSG = EmptyMsg()
       self.pub_new_goal_.publish( newStateMSG)
@@ -199,6 +202,7 @@ class StageEnvironment(object):
     # Add whatever info you want
     info = ""
 
+    #rospy.loginfo("Episede ended, reward: %g", reward)
     return self.screen, reward, self.terminal, info
     #observation, reward, terminal, info = self.env.step(action)
     #return self.preprocess(observation), reward, terminal, info
