@@ -8,6 +8,7 @@ DQNStageBridge::DQNStageBridge(ros::NodeHandle& nh)
     sub_odom_(nh_.subscribe("base_pose_ground_truth", 1, &DQNStageBridge::updateRobotPoseCB, this)),
     sub_action_(nh_.subscribe("dqn/selected_action", 1, &DQNStageBridge::actionGeneratorCB, this)),
     sub_new_goal_(nh_.subscribe("dqn/new_goal", 1, &DQNStageBridge::selectGoalCB, this)),
+    sub_last_reward_(nh_.subscribe("dqn/lastreward", 1, &DQNStageBridge::printRewardCB, this)),
     pub_goal_(nh_.advertise<geometry_msgs::Pose>("bridge/goal_pose", 1, true)),
     pub_cur_pose_(nh_.advertise<geometry_msgs::Pose>("bridge/current_pose", 1, true)),
     pub_cur_rot_(nh_.advertise<std_msgs::Float32>("bridge/current_direction", 1, true)),
@@ -123,6 +124,11 @@ void DQNStageBridge::actionGeneratorCB(const std_msgs::Int8ConstPtr &act)
   //ROS_INFO("Action %d received, x: %g w: %g", act->data, f, w);
 }
 
+void DQNStageBridge::printRewardCB(const std_msgs::Float32ConstPtr &rwd)
+{
+  ROS_INFO("Last eposide reward: %g", rwd->data);
+}
+
 void DQNStageBridge::SpinOnce()
 {
   ros::spinOnce();
@@ -146,7 +152,7 @@ void DQNStageBridge::Spin()
 
 void DQNStageBridge::selectGoalCB(const std_msgs::EmptyConstPtr &msg)
 {
-  double theta = double(rand())/RAND_MAX;
+  double theta = 2*PI * double(rand())/RAND_MAX;
   double r = rand()%21;
   goalPose.position.x = r*cos(theta);
   goalPose.position.y = r*sin(theta);

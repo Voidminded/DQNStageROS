@@ -6,6 +6,7 @@ from std_msgs.msg import Float32
 from std_msgs.msg import Empty as EmptyMsg
 from geometry_msgs.msg import Pose
 from std_srvs.srv import Empty as EmptySrv
+from rosgraph_msgs.msg import Clock
 
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
@@ -28,7 +29,7 @@ flags = tf.app.flags
 # Deep q Network
 flags.DEFINE_boolean('use_gpu', True, 'Whether to use gpu or not. gpu use NHWC and gpu use NCHW for data_format')
 flags.DEFINE_string('agent_type', 'DQN', 'The type of agent [DQN]')
-flags.DEFINE_boolean('double_q', True, 'Whether to use double Q-learning')
+flags.DEFINE_boolean('double_q', False, 'Whether to use double Q-learning')
 flags.DEFINE_string('network_header_type', 'nature', 'The type of network header [mlp, nature, nips]')
 flags.DEFINE_string('network_output_type', 'normal', 'The type of network output [normal, dueling]')
 
@@ -52,7 +53,7 @@ flags.DEFINE_integer('max_grad_norm', None, 'The maximum norm of gradient while 
 flags.DEFINE_float('discount_r', 0.99, 'The discount factor for reward')
 
 # Timer
-flags.DEFINE_integer('t_train_freq', 4, '')
+flags.DEFINE_integer('t_train_freq', 1, '')
 
 # Below numbers will be multiplied by scale
 flags.DEFINE_integer('scale', 10000, 'The scale for big numbers')
@@ -74,11 +75,11 @@ flags.DEFINE_float('gamma', 0.99, 'Discount factor of return')
 flags.DEFINE_float('beta', 0.01, 'Beta of RMSProp optimizer')
 
 # Debug
-flags.DEFINE_boolean('display', True, 'Whether to do display the game screen or not')
-flags.DEFINE_string('log_level', 'INFO', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
+flags.DEFINE_boolean('display', False, 'Whether to do display the game screen or not')
+flags.DEFINE_string('log_level', 'DEBUG', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
 flags.DEFINE_integer('random_seed', 123, 'Value of random seed')
 flags.DEFINE_string('tag', '', 'The name of tag for a model, only for debugging')
-flags.DEFINE_string('gpu_fraction', '2/3', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
+flags.DEFINE_string('gpu_fraction', '3/3', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
 
 
 def calc_gpu_fraction(fraction_string):
@@ -117,7 +118,7 @@ class StageEnvironment(object):
     self.data_format = data_format
     self.observation_dims = observation_dims
 
-    self.screen = np.zeros((self.observation_dims[0],self.observation_dims[1],1), np.uint8)
+    self.screen = np.zeros((self.observation_dims[0],self.observation_dims[1]), np.uint8)
     
     #####################
     # Followings are not used yet
@@ -138,6 +139,9 @@ class StageEnvironment(object):
     self.dir = 0.0
     self.prevDist = 0.0
     self.terminal = 0
+    self.sendTerminal = 0
+    self.clock = Clock()
+    self.lastClock = Clock()
 
     rospy.wait_for_service('reset_positions')
     self.resetStage = rospy.ServiceProxy('reset_positions', EmptySrv)
@@ -145,6 +149,8 @@ class StageEnvironment(object):
     # Publishers:
     self.pub_action_ = rospy.Publisher("dqn/selected_action",Int8,queue_size=1)
     self.pub_new_goal_ = rospy.Publisher("dqn/new_goal",EmptyMsg,queue_size=1)
+    self.pub_rew_ = rospy.Publisher("dqn/lastreward",Float32,queue_size=1)
+    
     
     # Subscribers:
     rospy.Subscriber('bridge/laser_image', Image, self.laserCB,queue_size=1)
@@ -152,15 +158,16 @@ class StageEnvironment(object):
     rospy.Subscriber('bridge/impact', EmptyMsg, self.impactCB,queue_size=1)
     rospy.Subscriber('bridge/current_pose', Pose, self.positionCB,queue_size=1)
     rospy.Subscriber('bridge/goal_pose', Pose, self.targetCB,queue_size=1)
-
+    rospy.Subscriber('clock', Clock, self.stepCB,queue_size=1)
   
   
   def new_game(self):
     rospy.wait_for_service('reset_positions')
     self.resetStage()
     self.terminal = 0
-    #newStateMSG = EmptyMsg()
-    #self.pub_new_goal_.publish( newStateMSG)
+    self.sendTerminal = 0
+    newStateMSG = EmptyMsg()
+    self.pub_new_goal_.publish( newStateMSG)
     cv2.waitKey(30)
     return self.preprocess(), 0, False
 
@@ -183,7 +190,7 @@ class StageEnvironment(object):
 
     if self.display:
       cv2.imshow("Screen", self.screen)
-    cv2.waitKey(9)
+    #cv2.waitKey(9)
 
     dist = (self.poseX - self.goalX)**2 + (self.poseY - self.goalY)**2
     reward = (self.prevDist - dist)/10.0
@@ -203,7 +210,21 @@ class StageEnvironment(object):
     info = ""
 
     #rospy.loginfo("Episede ended, reward: %g", reward)
-    return self.screen, reward, self.terminal, info
+    while(self.clock == self.lastClock):
+      pass
+    self.lastClock = self.clock
+    
+    if self.terminal == 2:
+      self.sendTerminal = 1
+
+    if self.terminal == 1:
+      rewd = Float32()
+      rewd.data = reward
+      self.pub_rew_.publish( rewd)
+      self.terminal = 2
+    
+    return self.screen, reward, self.sendTerminal, info
+    
     #observation, reward, terminal, info = self.env.step(action)
     #return self.preprocess(observation), reward, terminal, info
 
@@ -213,11 +234,15 @@ class StageEnvironment(object):
   def laserCB(self, data):
     try:
       self.screen = np.squeeze(bridge.imgmsg_to_cv2(data, "mono8"))
+     # print shape( self.screen)
     except CvBridgeError as e:
       print(e)
 
   def directionCB(self, data):
     self.dir = data
+  
+  def stepCB( self, data):
+    self.clock = data
 
   def positionCB( self, data):
     self.poseX = data.position.x
@@ -228,7 +253,8 @@ class StageEnvironment(object):
     self.goalY = data.position.y
 
   def impactCB( self, data):
-    self.terminal = 1
+    if self.terminal == 0:
+      self.terminal = 1
 
 
 def main(_):

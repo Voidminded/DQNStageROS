@@ -6,12 +6,12 @@ include "pioneer.inc"
 include "map.inc"
 include "sick.inc"
 
-paused 			1
+paused 			0
 speedup 		-1
 show_clock 	1
 show_clock_interval 100
 resolution 	0.2
-threads 		4
+threads 	4	
 
 # configure the GUI window
 window
