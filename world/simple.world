@@ -8,8 +8,8 @@ include "sick.inc"
 
 paused 			0
 speedup 		-1
-show_clock 	1
-show_clock_interval 100
+show_clock 	0
+show_clock_interval 10000
 resolution 	0.2
 threads 	4	
 

@@ -1,30 +1,29 @@
 #!/usr/bin/env python
 import rospy
-from sensor_msgs.msg import Image
-from std_msgs.msg import Int8
-from std_msgs.msg import Float32
-from std_msgs.msg import Empty as EmptyMsg
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Twist
 from std_srvs.srv import Empty as EmptySrv
-from rosgraph_msgs.msg import Clock
+from tf import transformations
+import message_filters
 
 import cv2
-from cv_bridge import CvBridge, CvBridgeError
 import random
 import logging
 import numpy as np
 
-import tensorflow as tf
+import tensorflow as tensor
 from utils import get_model_dir
 from networks.cnn import CNN
 from networks.mlp import MLPSmall
 from agents.statistic import Statistic
 
-bridge = CvBridge()
-
 logger = logging.getLogger(__name__)
 
-flags = tf.app.flags
+flags = tensor.app.flags
+
+Map_Max_Dist = 40.0
 
 # Deep q Network
 flags.DEFINE_boolean('use_gpu', True, 'Whether to use gpu or not. gpu use NHWC and gpu use NCHW for data_format')
@@ -103,7 +102,7 @@ logger.propagate = False
 logger.setLevel(conf.log_level)
 
 # set random seed
-tf.set_random_seed(conf.random_seed)
+tensor.set_random_seed(conf.random_seed)
 random.seed(conf.random_seed)
 
 # Environment 
@@ -120,56 +119,49 @@ class StageEnvironment(object):
 
     self.screen = np.zeros((self.observation_dims[0],self.observation_dims[1]), np.uint8)
     
-    #####################
-    # Followings are not used yet
-    self.syncLaser = False
-    self.syncPose = False
-    self.syncGoal = False
-    self.syncDir = False
-
-    self.sentTime = 0
-    #####################
-
-    self.poseX = 0.0
-    self.poseY = 0.0
-    self.prevPoseX = 0.0
-    self.prevPoseY = 0.0
-    self.goalX = 0.0
-    self.goalY = 0.0
-    self.dir = 0.0
+    #self.dirToTarget = 0
+    self.robotPose = Pose()
+    self.goalPose = Pose()
+    self.robotRot = 0.0
     self.prevDist = 0.0
+
     self.terminal = 0
     self.sendTerminal = 0
-    self.clock = Clock()
-    self.lastClock = Clock()
+    
+    self.readyForNewData = True
 
     rospy.wait_for_service('reset_positions')
     self.resetStage = rospy.ServiceProxy('reset_positions', EmptySrv)
 
-    # Publishers:
-    self.pub_action_ = rospy.Publisher("dqn/selected_action",Int8,queue_size=1)
-    self.pub_new_goal_ = rospy.Publisher("dqn/new_goal",EmptyMsg,queue_size=1)
-    self.pub_rew_ = rospy.Publisher("dqn/lastreward",Float32,queue_size=1)
-    
     
     # Subscribers:
-    rospy.Subscriber('bridge/laser_image', Image, self.laserCB,queue_size=1)
-    rospy.Subscriber('bridge/current_dir', Float32, self.directionCB,queue_size=1)
-    rospy.Subscriber('bridge/impact', EmptyMsg, self.impactCB,queue_size=1)
-    rospy.Subscriber('bridge/current_pose', Pose, self.positionCB,queue_size=1)
-    rospy.Subscriber('bridge/goal_pose', Pose, self.targetCB,queue_size=1)
-    rospy.Subscriber('clock', Clock, self.stepCB,queue_size=1)
-  
-  
+   # rospy.Subscriber('base_scan', LaserScan, self.scanCB,queue_size=1)
+   # rospy.Subscriber('base_pose_ground_truth', Odometry, self.poseUpdateCB, queue_size=1)
+    
+    # trying time sync:
+    sub_scan_ = message_filters.Subscriber('base_scan', LaserScan)
+    sub_pose_ = message_filters.Subscriber('base_pose_ground_truth', Odometry)
+    ts = message_filters.ApproximateTimeSynchronizer( [sub_scan_, sub_pose_], 1, 0.01)
+    ts.registerCallback( self.syncedCB)
+
+    # publishers:
+    self.pub_vel_ = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
+
   def new_game(self):
-    rospy.wait_for_service('reset_positions')
     self.resetStage()
     self.terminal = 0
     self.sendTerminal = 0
-    newStateMSG = EmptyMsg()
-    self.pub_new_goal_.publish( newStateMSG)
-    cv2.waitKey(30)
-    return self.preprocess(), 0, False
+    #Select a new goal
+    theta = 2.0 * np.pi * random.random()
+    r = random.random()*21
+    self.goalPose.position.x = r*np.cos( theta)
+    self.goalPose.position.y = r*np.sin( theta)
+    print( "New Goal pose selected: %g, %g", self.goalPose.position.x, self.goalPose.position.y)
+
+
+    self.prevDist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
+    #cv2.waitKey(30)
+    return self.screen, 0, False
 
   def new_random_game(self):
     # TODO: maybe start from a random position not just reset the robot's position to initial point
@@ -177,53 +169,45 @@ class StageEnvironment(object):
     return self.new_game()
 
   def step(self, action, is_training=False):
-    self.prevPoseX = self.poseX
-    self.prevPoseY = self.poseY
-
     if action == -1:
       # Step with random action
       action = int(random.random()*(self.action_size))
 
-    msg = Int8()
-    msg.data = action
-    self.pub_action_.publish( msg)
+    self.actionToVel( action)
 
     if self.display:
       cv2.imshow("Screen", self.screen)
-    #cv2.waitKey(9)
+      cv2.waitKey(30)
 
-    dist = (self.poseX - self.goalX)**2 + (self.poseY - self.goalY)**2
+    dist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
     reward = (self.prevDist - dist)/10.0
     self.prevDist = dist
 
     if self.terminal == 1:
       reward -= 900
-      #self.new_random_game()
 
     if dist < 0.9:
       reward += 300
-      newStateMSG = EmptyMsg()
-      self.pub_new_goal_.publish( newStateMSG)
-      # cv2.waitKey(30)
 
     # Add whatever info you want
     info = ""
 
     #rospy.loginfo("Episede ended, reward: %g", reward)
-    while(self.clock == self.lastClock):
-      pass
-    self.lastClock = self.clock
+   # while(True): #self.clock == self.lastClock): ----> aghimed !!!
+   #   pass
     
-    if self.terminal == 2:
-      self.sendTerminal = 1
+    #if self.terminal == 2:
+    #  self.sendTerminal = 1
 
-    if self.terminal == 1:
-#      rewd = Float32()
-#      rewd.data = reward
-#      self.pub_rew_.publish( rewd)
-      self.terminal = 2
+    #if self.terminal == 1:
+    #  self.terminal = 2
+   
+    self.readyForNewData = True
+
+    while( self.readyForNewData == True):
+      pass
     
-    return self.screen, reward, self.sendTerminal, info
+    return self.screen, reward, self.terminal, info
     
     #observation, reward, terminal, info = self.env.step(action)
     #return self.preprocess(observation), reward, terminal, info
@@ -231,31 +215,133 @@ class StageEnvironment(object):
   def preprocess(self):
     return self.screen
 
-  def laserCB(self, data):
-    try:
-      self.screen = np.squeeze(bridge.imgmsg_to_cv2(data, "mono8"))
-     # print shape( self.screen)
-    except CvBridgeError as e:
-      print(e)
+#  def scanCB( self, scan):
+#    if len(scan.ranges) < 1:
+#      return
+#    #self.screen = np.zeros(( self.observation_dims[0], self.observation_dims[1], 1), np.uint8)
+#    self.screen[:] = 128
+#    x = int(scan.range_max* 10)
+#    y = int(scan.range_max*10)
+#    rad = int(scan.range_max*10)
+#    boomed = False
+#    
+#    # Occupancy grid:
+#    for i in range(0, 360):
+#      for j in range( 0, rad):
+#        if scan.ranges[i]*10 >= j:
+#          self.screen[ x + int(j* np.cos( np.pi*i/180.0)), y + int( j* np.sin( np.pi*i/180.0))] = 255
+#      if scan.ranges[i]*10 < scan.range_max:
+#        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))] = 0
+#      if scan.ranges[i] < 0.66:
+#        boomed = True
+#   
+#    #steering guide:
+#    for i in range( rad*2, self.observation_dims[0]):
+#      stir = (self.dirToTarget*40/180)+40
+#      minStir = min( stir, 40)
+#      maxStir = max( stir, 40)
+#      for j in range( 0, 80):
+#        if j > minStir and j < maxStir:
+#          self.screen[i ,j] = 0
+#        else:
+#          self.screen[ i, j] = 255
+#    
+#    #Distance info:
+#    dist = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
+#    normDist = 72*dist/Map_Max_Dist
+#    for j in range( rad*2, self.observation_dims[1]):
+#      for i in range(0, 72):
+#        if i <= normDist:
+#          self.screen[i, j] = 0
+#        else:
+#          self.screen[i, j] = 255 
+#
+#    if boomed == True:
+#      self.terminal = 1 
+#
+#  def poseUpdateCB(self, odom):
+#    self.robotPose = odom.pose.pose
+#    quatOri = (self.robotPose.orientation.x, self.robotPose.orientation.y, self.robotPose.orientation.z, self.robotPose.orientation.w)
+#    ( _, _, yaw) = transformations.euler_from_quaternion( quatOri)
+#    robotOri =  180*yaw/np.pi
+#    angleBetween = 180* np.arctan2( self.goalPose.position.y - self.robotPose.position.y, self.goalPose.position.x - self.robotPose.position.x) /np.pi
+#    self.dirToTarget = self.constrainAngle( robotOri- angleBetween)
+#    
+  def constrainAngle( self, x):
+    x = np.fmod( x+180, 360)
+    if x < 0:
+      x+= 360
+    return x-180
 
-  def directionCB(self, data):
-    self.dir = data
-  
-  def stepCB( self, data):
-    self.clock = data
+  def actionToVel( self, action):
+    if action < 0 or action >= self.action_size:
+      rospy.logerr( "Invalid action %d", action)
+    else:
+      w = ((action % 7)-3)/3.0
+      f = 0.3*(action % 7)
+      msg = Twist()
+      msg.angular.x = 0
+      msg.angular.y = 0
+      msg.angular.z = w
+      msg.linear.x = f
+      msg.linear.y = 0
+      msg.linear.z = 0
+      self.pub_vel_.publish( msg)
 
-  def positionCB( self, data):
-    self.poseX = data.position.x
-    self.poseY = data.position.y
+  def syncedCB( self, scan, odom):
+    rospy.logwarn("received !")
+    if len(scan.ranges) < 1 or self.readyForNewData == False:
+      return
+    
+    # pose stuff
+    self.robotPose = odom.pose.pose
+    quatOri = (self.robotPose.orientation.x, self.robotPose.orientation.y, self.robotPose.orientation.z, self.robotPose.orientation.w)
+    ( _, _, yaw) = transformations.euler_from_quaternion( quatOri)
+    robotOri =  180*yaw/np.pi
+    angleBetween = 180* np.arctan2( self.goalPose.position.y - self.robotPose.position.y, self.goalPose.position.x - self.robotPose.position.x) /np.pi
+    dirToTarget = self.constrainAngle( robotOri- angleBetween)
 
-  def targetCB( self, data):
-    self.goalX = data.position.x
-    self.goalY = data.position.y
+    self.screen[:] = 128
+    x = int(scan.range_max* 10)
+    y = int(scan.range_max*10)
+    rad = int(scan.range_max*10)
+    boomed = False
+    
+    # Occupancy grid:
+    for i in range(0, 360):
+      for j in range( 0, rad):
+        if scan.ranges[i]*10 >= j:
+          self.screen[ x + int(j* np.cos( np.pi*i/180.0)), y + int( j* np.sin( np.pi*i/180.0))] = 255
+      if scan.ranges[i]*10 < scan.range_max:
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))] = 0
+      if scan.ranges[i] < 0.66:
+        boomed = True
+   
+    #steering guide:
+    for i in range( rad*2, self.observation_dims[0]):
+      stir = (dirToTarget*40/180)+40
+      minStir = min( stir, 40)
+      maxStir = max( stir, 40)
+      for j in range( 0, 80):
+        if j > minStir and j < maxStir:
+          self.screen[i ,j] = 0
+        else:
+          self.screen[ i, j] = 255
+    
+    #Distance info:
+    dist = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
+    normDist = 72*dist/Map_Max_Dist
+    for j in range( rad*2, self.observation_dims[1]):
+      for i in range(0, 72):
+        if i <= normDist:
+          self.screen[i, j] = 0
+        else:
+          self.screen[i, j] = 255 
 
-  def impactCB( self, data):
-    if self.terminal == 0:
-      self.terminal = 1
-
+    if boomed == True:
+      self.terminal = 1 
+    rospy.logwarn(" boom ?! : %d", boomed)
+    self.readyForNewData = False
 
 def main(_):
   # preprocess
@@ -275,10 +361,10 @@ def main(_):
        't_save', 't_train', 'display', 'log_level', 'random_seed', 'tag', 'scale'])
 
   # start
-  gpu_options = tf.GPUOptions(
+  gpu_options = tensor.GPUOptions(
       per_process_gpu_memory_fraction=calc_gpu_fraction(conf.gpu_fraction))
 
-  with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
+  with tensor.Session(config=tensor.ConfigProto(gpu_options=gpu_options)) as sess:
     env = StageEnvironment(conf.max_random_start, conf.observation_dims, conf.data_format, conf.display)
 
     if conf.network_header_type in ['nature', 'nips']:
@@ -301,14 +387,14 @@ def main(_):
                               observation_dims=conf.observation_dims,
                               history_length=conf.history_length,
                               output_size=env.action_size,
-                              hidden_activation_fn=tf.sigmoid,
+                              hidden_activation_fn=tensor.sigmoid,
                               network_output_type=conf.network_output_type,
                               name='pred_network', trainable=True)
       target_network = MLPSmall(sess=sess,
                                 observation_dims=conf.observation_dims,
                                 history_length=conf.history_length,
                                 output_size=env.action_size,
-                                hidden_activation_fn=tf.sigmoid,
+                                hidden_activation_fn=tensor.sigmoid,
                                 network_output_type=conf.network_output_type,
                                 name='target_network', trainable=False)
     else:
@@ -327,6 +413,4 @@ if __name__ == '__main__':
   # Initialize the node with rospy
   rospy.init_node('dqn_node')
 
-  tf.app.run()
-  # spin to keep the script for exiting
-  rospy.spin()
+  tensor.app.run()
