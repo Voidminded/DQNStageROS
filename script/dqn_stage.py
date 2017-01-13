@@ -4,6 +4,7 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Float64
 from std_srvs.srv import Empty as EmptySrv
 from tf import transformations
 import message_filters
@@ -12,6 +13,7 @@ import cv2
 import random
 import logging
 import numpy as np
+import copy
 
 import tensorflow as tensor
 from utils import get_model_dir
@@ -36,10 +38,10 @@ flags.DEFINE_string('network_output_type', 'normal', 'The type of network output
 flags.DEFINE_string('env_name', 'Stage', 'The name of gym environment to use')
 flags.DEFINE_integer('max_random_start', 30, 'The maximum number of NOOP actions at the beginning of an episode')
 flags.DEFINE_integer('history_length', 4, 'The length of history of observation to use as an input to DQN')
-flags.DEFINE_integer('max_r', +9000, 'The maximum value of clipped reward')
-flags.DEFINE_integer('min_r', -9000, 'The minimum value of clipped reward')
+flags.DEFINE_integer('max_r', +999999999, 'The maximum value of clipped reward')
+flags.DEFINE_integer('min_r', -999999999, 'The minimum value of clipped reward')
 flags.DEFINE_string('observation_dims', '[80, 80]', 'The dimension of gym observation')
-flags.DEFINE_boolean('random_start', True, 'Whether to start with random state')
+flags.DEFINE_boolean('random_start', False, 'Whether to start with random state')
 
 # Training
 flags.DEFINE_boolean('is_train', True, 'Whether to do training or testing')
@@ -124,6 +126,8 @@ class StageEnvironment(object):
     self.goalPose = Pose()
     self.robotRot = 0.0
     self.prevDist = 0.0
+    self.boom = False
+    self.numWins = 0
 
     self.terminal = 0
     self.sendTerminal = 0
@@ -141,14 +145,17 @@ class StageEnvironment(object):
     # trying time sync:
     sub_scan_ = message_filters.Subscriber('base_scan', LaserScan)
     sub_pose_ = message_filters.Subscriber('base_pose_ground_truth', Odometry)
-    ts = message_filters.ApproximateTimeSynchronizer( [sub_scan_, sub_pose_], 1, 0.01)
+    ts = message_filters.TimeSynchronizer( [sub_scan_, sub_pose_], 1)
     ts.registerCallback( self.syncedCB)
 
     # publishers:
     self.pub_vel_ = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
+    self.pub_rew_ = rospy.Publisher("lastreward",Float64,queue_size=1) 
+
 
   def new_game(self):
     self.resetStage()
+    rospy.sleep(0.3)
     self.terminal = 0
     self.sendTerminal = 0
     #Select a new goal
@@ -156,39 +163,61 @@ class StageEnvironment(object):
     r = random.random()*21
     self.goalPose.position.x = r*np.cos( theta)
     self.goalPose.position.y = r*np.sin( theta)
-    print( "New Goal pose selected: %g, %g", self.goalPose.position.x, self.goalPose.position.y)
-
+    self.readyForNewData = False
+    self.numWins = 0
 
     self.prevDist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
-    #cv2.waitKey(30)
     return self.screen, 0, False
 
   def new_random_game(self):
     # TODO: maybe start from a random position not just reset the robot's position to initial point
     # which needs some edit in stage_ros
     return self.new_game()
+    #pass
 
-  def step(self, action, is_training=False):
+  def step(self, action, is_training):
     if action == -1:
       # Step with random action
       action = int(random.random()*(self.action_size))
 
     self.actionToVel( action)
+    self.readyForNewData = True
 
     if self.display:
       cv2.imshow("Screen", self.screen)
-      cv2.waitKey(30)
+      #cv2.waitKey(30)
 
     dist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
-    reward = (self.prevDist - dist)/10.0
+    reward = self.prevDist - dist
     self.prevDist = dist
 
     if self.terminal == 1:
       reward -= 900
+      self.boom = True
+      rewd = Float64()
+      rewd.data = copy.deepcopy( reward)
+      self.pub_rew_.publish( rewd)
+
+      self.sendTerminal = 1
 
     if dist < 0.9:
       reward += 300
-
+      #Select a new goal
+      theta = 2.0 * np.pi * random.random()
+      r = random.random()*21
+      self.goalPose.position.x = r*np.cos( theta)
+      self.goalPose.position.y = r*np.sin( theta)
+      self.prevDist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
+      rwd = Float64()
+      rwd.data = 10101.963
+      self.pub_rew_.publish( rwd)
+      if self.numWins == 99:
+        reward += 9000
+        rewd = Float64()
+        rewd.data = copy.deepcopy( reward)
+        self.pub_rew_.publish( rewd)
+        self.sendTerminal = 1
+    
     # Add whatever info you want
     info = ""
 
@@ -197,17 +226,16 @@ class StageEnvironment(object):
    #   pass
     
     #if self.terminal == 2:
-    #  self.sendTerminal = 1
+      #self.sendTerminal = 1
 
     #if self.terminal == 1:
-    #  self.terminal = 2
+      #self.terminal = 2
    
-    self.readyForNewData = True
 
     while( self.readyForNewData == True):
       pass
     
-    return self.screen, reward, self.terminal, info
+    return self.screen, reward, self.sendTerminal, info
     
     #observation, reward, terminal, info = self.env.step(action)
     #return self.preprocess(observation), reward, terminal, info
@@ -289,8 +317,8 @@ class StageEnvironment(object):
       self.pub_vel_.publish( msg)
 
   def syncedCB( self, scan, odom):
-    rospy.logwarn("received !")
     if len(scan.ranges) < 1 or self.readyForNewData == False:
+      #print "limitted by GPU !!!!"
       return
     
     # pose stuff
@@ -339,8 +367,10 @@ class StageEnvironment(object):
           self.screen[i, j] = 255 
 
     if boomed == True:
-      self.terminal = 1 
-    rospy.logwarn(" boom ?! : %d", boomed)
+      if self.boom == False:
+        self.terminal = 1 
+    else:
+      self.boom = False
     self.readyForNewData = False
 
 def main(_):
