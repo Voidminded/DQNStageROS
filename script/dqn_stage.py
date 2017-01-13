@@ -42,6 +42,7 @@ flags.DEFINE_integer('max_r', +999999999, 'The maximum value of clipped reward')
 flags.DEFINE_integer('min_r', -999999999, 'The minimum value of clipped reward')
 flags.DEFINE_string('observation_dims', '[80, 80]', 'The dimension of gym observation')
 flags.DEFINE_boolean('random_start', False, 'Whether to start with random state')
+flags.DEFINE_boolean('use_cumulated_reward', False, 'Whether to use cumulated reward or not')
 
 # Training
 flags.DEFINE_boolean('is_train', True, 'Whether to do training or testing')
@@ -54,7 +55,7 @@ flags.DEFINE_integer('max_grad_norm', None, 'The maximum norm of gradient while 
 flags.DEFINE_float('discount_r', 0.99, 'The discount factor for reward')
 
 # Timer
-flags.DEFINE_integer('t_train_freq', 1, '')
+flags.DEFINE_integer('t_train_freq', 4, '')
 
 # Below numbers will be multiplied by scale
 flags.DEFINE_integer('scale', 10000, 'The scale for big numbers')
@@ -77,10 +78,10 @@ flags.DEFINE_float('beta', 0.01, 'Beta of RMSProp optimizer')
 
 # Debug
 flags.DEFINE_boolean('display', False, 'Whether to do display the game screen or not')
-flags.DEFINE_string('log_level', 'DEBUG', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
+flags.DEFINE_string('log_level', 'INFO', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
 flags.DEFINE_integer('random_seed', 123, 'Value of random seed')
 flags.DEFINE_string('tag', '', 'The name of tag for a model, only for debugging')
-flags.DEFINE_string('gpu_fraction', '3/3', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
+flags.DEFINE_string('gpu_fraction', '1/1', 'idx / # of gpu fraction e.g. 1/3, 2/3, 3/3')
 
 
 def calc_gpu_fraction(fraction_string):
