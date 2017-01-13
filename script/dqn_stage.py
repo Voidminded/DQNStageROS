@@ -129,6 +129,7 @@ class StageEnvironment(object):
     self.prevDist = 0.0
     self.boom = False
     self.numWins = 0
+    self.ep_reward = 0.0
 
     self.terminal = 0
     self.sendTerminal = 0
@@ -151,7 +152,7 @@ class StageEnvironment(object):
 
     # publishers:
     self.pub_vel_ = rospy.Publisher('cmd_vel', Twist, queue_size = 1)
-    self.pub_rew_ = rospy.Publisher("lastreward",Float64,queue_size=1) 
+    self.pub_rew_ = rospy.Publisher("lastreward",Float64,queue_size=10) 
 
 
   def new_game(self):
@@ -160,15 +161,19 @@ class StageEnvironment(object):
     self.terminal = 0
     self.sendTerminal = 0
     #Select a new goal
-    theta = 2.0 * np.pi * random.random()
-    r = random.random()*21
-    self.goalPose.position.x = r*np.cos( theta)
-    self.goalPose.position.y = r*np.sin( theta)
+    d = -1
+    while d < 3.9:
+      theta = 2.0 * np.pi * random.random()
+      r = random.random()*21
+      self.goalPose.position.x = r*np.cos( theta)
+      self.goalPose.position.y = r*np.sin( theta)
+      d = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
+
+    self.prevDist = d
     self.readyForNewData = False
     self.numWins = 0
-
-    self.prevDist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
-    return self.screen, 0, False
+    self.ep_reward = 0.0
+    return self.screen, 0, 0
 
   def new_random_game(self):
     # TODO: maybe start from a random position not just reset the robot's position to initial point
@@ -189,16 +194,12 @@ class StageEnvironment(object):
       #cv2.waitKey(30)
 
     dist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
-    reward = self.prevDist - dist
+    reward = (self.prevDist - dist)/10.0
     self.prevDist = dist
 
     if self.terminal == 1:
       reward -= 900
       self.boom = True
-      rewd = Float64()
-      rewd.data = copy.deepcopy( reward)
-      self.pub_rew_.publish( rewd)
-
       self.sendTerminal = 1
 
     if dist < 0.9:
@@ -212,11 +213,9 @@ class StageEnvironment(object):
       rwd = Float64()
       rwd.data = 10101.963
       self.pub_rew_.publish( rwd)
+      self.numWins += 1
       if self.numWins == 99:
         reward += 9000
-        rewd = Float64()
-        rewd.data = copy.deepcopy( reward)
-        self.pub_rew_.publish( rewd)
         self.sendTerminal = 1
     
     # Add whatever info you want
@@ -226,12 +225,18 @@ class StageEnvironment(object):
    # while(True): #self.clock == self.lastClock): ----> aghimed !!!
    #   pass
     
+    self.ep_reward += reward
+
     #if self.terminal == 2:
-      #self.sendTerminal = 1
+    #  self.sendTerminal = 1
 
     #if self.terminal == 1:
-      #self.terminal = 2
+    #  self.terminal = 2
    
+    if self.sendTerminal == 1:
+      rewd = Float64()
+      rewd.data = self.ep_reward
+      self.pub_rew_.publish( rewd)
 
     while( self.readyForNewData == True):
       pass

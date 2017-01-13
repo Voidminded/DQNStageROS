@@ -59,12 +59,12 @@ class Statistic(object):
       self.total_loss += loss
       self.total_reward += reward
 
+      self.ep_reward += reward
+      
       if terminal:
         self.num_game += 1
         self.ep_rewards.append(self.ep_reward)
         self.ep_reward = 0.
-      else:
-        self.ep_reward += reward
 
       if is_update:
         self.update_count += 1
