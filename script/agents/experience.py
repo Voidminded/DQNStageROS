@@ -34,7 +34,10 @@ class Experience(object):
     indexes = []
     while len(indexes) < self.batch_size:
       while True:
-        index = random.randint(self.history_length, self.count - 1)
+        if self.count == self.history_length:
+          index = 0
+        else:
+          index = random.randint(self.history_length, self.count - 1)
         if index >= self.current and index - self.history_length < self.current:
           continue
         if self.terminals[(index - self.history_length):index].any():

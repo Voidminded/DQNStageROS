@@ -36,7 +36,7 @@ flags.DEFINE_string('network_output_type', 'normal', 'The type of network output
 
 # Environment
 flags.DEFINE_string('env_name', 'Stage', 'The name of gym environment to use')
-flags.DEFINE_integer('max_random_start', 30, 'The maximum number of NOOP actions at the beginning of an episode')
+flags.DEFINE_integer('max_random_start', 0, 'The maximum number of NOOP actions at the beginning of an episode')
 flags.DEFINE_integer('history_length', 4, 'The length of history of observation to use as an input to DQN')
 flags.DEFINE_integer('max_r', +999999999, 'The maximum value of clipped reward')
 flags.DEFINE_integer('min_r', -999999999, 'The minimum value of clipped reward')
@@ -55,7 +55,7 @@ flags.DEFINE_integer('max_grad_norm', None, 'The maximum norm of gradient while 
 flags.DEFINE_float('discount_r', 0.99, 'The discount factor for reward')
 
 # Timer
-flags.DEFINE_integer('t_train_freq', 4, '')
+flags.DEFINE_integer('t_train_freq', 1, '')
 
 # Below numbers will be multiplied by scale
 flags.DEFINE_integer('scale', 10000, 'The scale for big numbers')
@@ -111,11 +111,12 @@ random.seed(conf.random_seed)
 # Environment 
 class StageEnvironment(object):
   def __init__(self, max_random_start,
-               observation_dims, data_format, display):
+               observation_dims, data_format, display, use_cumulated_reward):
     
     self.max_random_start = max_random_start
     self.action_size = 28
 
+    self.use_cumulated_reward = use_cumulated_reward
     self.display = display
     self.data_format = data_format
     self.observation_dims = observation_dims
@@ -191,17 +192,18 @@ class StageEnvironment(object):
 
     if self.display:
       cv2.imshow("Screen", self.screen)
-      #cv2.waitKey(30)
+      cv2.waitKey(30)
 
     dist = (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2
     reward = (self.prevDist - dist)/10.0
     self.prevDist = dist
 
     if self.terminal == 1:
-      reward -= 900
       self.boom = True
-      self.sendTerminal = 1
 
+    if self.terminal >0 :
+      reward -= 900
+    
     if dist < 0.9:
       reward += 300
       #Select a new goal
@@ -225,13 +227,14 @@ class StageEnvironment(object):
    # while(True): #self.clock == self.lastClock): ----> aghimed !!!
    #   pass
     
-    self.ep_reward += reward
+    if self.terminal < 2:
+      self.ep_reward += reward
 
-    #if self.terminal == 2:
-    #  self.sendTerminal = 1
+    if self.terminal == 2:
+      self.sendTerminal = 1
 
-    #if self.terminal == 1:
-    #  self.terminal = 2
+    if self.terminal == 1:
+      self.terminal = 2
    
     if self.sendTerminal == 1:
       rewd = Float64()
@@ -240,8 +243,10 @@ class StageEnvironment(object):
 
     while( self.readyForNewData == True):
       pass
-    
-    return self.screen, reward, self.sendTerminal, info
+    if self.use_cumulated_reward:
+      return self.screen, self.ep_reward, self.sendTerminal, info
+    else:
+      return self.screen, reward, self.sendTerminal, info
     
     #observation, reward, terminal, info = self.env.step(action)
     #return self.preprocess(observation), reward, terminal, info
@@ -346,8 +351,16 @@ class StageEnvironment(object):
       for j in range( 0, rad):
         if scan.ranges[i]*10 >= j:
           self.screen[ x + int(j* np.cos( np.pi*i/180.0)), y + int( j* np.sin( np.pi*i/180.0))] = 255
-      if scan.ranges[i]*10 < scan.range_max:
+      if scan.ranges[i] < scan.range_max:
         self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))-1] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))-2] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))-1] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))-2] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))-1] = 0
+        self.screen[ x + int( 10*scan.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*scan.ranges[i]*np.sin( np.pi*i/180))-2] = 0
       if scan.ranges[i] < 0.66:
         boomed = True
    
@@ -401,7 +414,7 @@ def main(_):
       per_process_gpu_memory_fraction=calc_gpu_fraction(conf.gpu_fraction))
 
   with tensor.Session(config=tensor.ConfigProto(gpu_options=gpu_options)) as sess:
-    env = StageEnvironment(conf.max_random_start, conf.observation_dims, conf.data_format, conf.display)
+    env = StageEnvironment(conf.max_random_start, conf.observation_dims, conf.data_format, conf.display, conf.use_cumulated_reward)
 
     if conf.network_header_type in ['nature', 'nips']:
       pred_network = CNN(sess=sess,
