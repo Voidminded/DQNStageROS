@@ -1,0 +1,72 @@
+# simple.world - basic world file example
+# Authors: Richard Vaughan, Sepehr
+# $Id$
+
+include "pioneer.inc"
+include "map.inc"
+include "sick.inc"
+
+paused 			0
+speedup 		-1
+show_clock 	0
+show_clock_interval 10000
+resolution 	0.2
+threads 	4	
+
+# configure the GUI window
+window
+(
+  size [ 1258 962 ] # in pixels
+  
+# Camera options 
+	scale 45.652            
+  center [ -7.764  -13.574 ]
+  rotate [ 0.000  0.000 ]
+
+# perspective camera options
+  pcam_loc [ 0.000 -4.000 2.000 ]
+  pcam_angle [ 70.000 0.000 ]
+
+# GUI options
+  show_data 1
+  show_flags 1
+  show_blocks 1
+  show_clock 1
+  show_footprints 0
+  show_grid 1
+  show_trailarrows 0
+  show_trailrise 0
+  show_trailfast 0
+  show_occupancy 0
+  pcam_on 0
+  screenshots 0
+)
+
+floorplan
+(
+  name "blank"
+  size [40.000 40.000 0.800]
+  pose [0.000 0.000 0.000 0.000]
+  bitmap "rinkDQN-noLocalMinima.png"
+  obstacle_return 1
+
+)
+
+define agent pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
+(
+  color "random"
+  localization "gps"
+  localization_origin [ 0 0 0 0 ]
+  gui_nose 0
+  laser_return 1
+  obstacle_return 1
+  sicklaser(
+	pose [ 0 0 0 0 ] 
+	) 
+)
+
+agent( pose [-4.825 -11.925 0.000 0.000 ])
+#agent( pose [-4.994 -13.142 0.000 0.000 ])
+#agent( pose [3.000 3.000 0.000 0.000 ])
+#agent( pose [-2.000 1.000 0.000 0.000 ])
+#agent( pose [-3 -3 0 0 ])
