@@ -17,6 +17,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV 3 REQUIRED)# PATHS ${CUSTOM_OPENCV_DIR} NO_DEFAULT_PATH)
 
+find_package(stage REQUIRED)
+
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -124,12 +126,17 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
+	${STAGE_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
-# add_library(DQNStageROS
-#   src/${PROJECT_NAME}/DQNStageROS.cpp
-# )
+ add_library(target_ctrl
+   src/target_ctrl.cpp
+ )
+
+ add_library(robot_ctrl
+   src/robot_ctrl.cpp
+ )
 
 add_executable(dqn_stage_bridge_node src/dqn_stage_bridge.cpp)
 
@@ -149,6 +156,14 @@ add_executable(dqn_stage_bridge_node src/dqn_stage_bridge.cpp)
 target_link_libraries(dqn_stage_bridge_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
+)
+target_link_libraries(target_ctrl
+  ${catkin_LIBRARIES}
+  ${STAGE_LIBRARIES}
+)
+target_link_libraries(robot_ctrl
+  ${catkin_LIBRARIES}
+  ${STAGE_LIBRARIES}
 )
 
 #############
