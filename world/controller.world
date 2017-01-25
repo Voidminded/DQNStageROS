@@ -62,10 +62,11 @@ define agent pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
   obstacle_return 1
   sicklaser(
 	pose [ 0 0 0 0 ] 
-	) 
+	)
+	ctrl "librobot_ctrl" 
 )
 
-#agent( pose [3.000 3.000 0.000 0.000 ])
+agent( pose [3.000 3.000 0.000 0.000 ])
 #agent( pose [-2.000 1.000 0.000 0.000 ])
 #agent( pose [-3 -3 0 0 ])
 

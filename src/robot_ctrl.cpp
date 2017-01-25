@@ -3,6 +3,8 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/LaserScan.h>
 #include <dqn_stage_ros/stage_message.h>
+#include <geometry_msgs/Twist.h>
+#include <tf/tf.h>
 
 using namespace Stg;
 
@@ -16,19 +18,22 @@ ModelRobot* robot;
 
 ros::NodeHandle* n;
 ros::Publisher pub_state_;
+ros::Subscriber sub_vel_;
 
-geometry_msgs::Pose rosCurPose;
+geometry_msgs::PoseStamped rosCurPose;
 sensor_msgs::LaserScan rosLaserData;
 bool collision = false;
+bool allowNewMsg = true;
 double minFrontDist;
+ros::Time lastSentTime;
 
 void stgPoseUpdateCB( Model* mod, ModelRobot* robot)
 {
     geometry_msgs::PoseStamped positionMsg;
-    positionMsg.pose.position.x = robot->pos->pose.x;
-    positionMsg.pose.position.y = robot->pos->pose.y;
-    positionMsg.pose.position.z = robot->pos->pose.z;
-//    positionMsg.pose.orientation
+    positionMsg.pose.position.x = robot->pos->GetPose().x;
+    positionMsg.pose.position.y = robot->pos->GetPose().y;
+    positionMsg.pose.position.z = robot->pos->GetPose().z;
+    positionMsg.pose.orientation = tf::createQuaternionMsgFromYaw( robot->pos->GetPose().a);
     positionMsg.header.stamp = ros::Time::now();
     rosCurPose = positionMsg;
 }
@@ -57,7 +62,7 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
             laserMsgs.ranges[i] = sensor.ranges[i];
             if(sensor.ranges[i] < 0.3)
                 collision = true;
-            if( i > (sensor.fov - 45)/2 && i < (sensor.fov + 45)/2 && sensor.ranges[i]  < minFrontDist)
+            if( i > (sensor.fov*180.0/M_PI - 45)/2 && i < (sensor.fov*180.0/M_PI + 45)/2 && sensor.ranges[i]  < minFrontDist)
                 minFrontDist = sensor.ranges[i];
 //            if(sensor.ranges[i] < min_laser_val)
 //                min_laser_val = sensor.ranges[i];
@@ -72,6 +77,30 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
         laserMsgs.header.stamp = ros::Time::now();
         rosLaserData = laserMsgs;
     }
+
+    //temp, just to check publish rate:
+    if( allowNewMsg
+            && laserMsgs.header.stamp > lastSentTime
+            && rosCurPose.header.stamp > lastSentTime)
+    {
+        robot->pos->SetSpeed( 0, 0, 0);
+        allowNewMsg = false;
+        dqn_stage_ros::stage_message msg;
+        msg.header.stamp = ros::Time::now();
+        msg.collision = collision;
+        msg.minFrontDist = minFrontDist;
+        msg.position = rosCurPose;
+        msg.laser = rosLaserData;
+        pub_state_.publish( msg);
+    }
+}
+
+void rosVelocityCB( const geometry_msgs::TwistConstPtr vel)
+{
+    robot->pos->SetXSpeed( vel->linear.x);
+    robot->pos->SetTurnSpeed( vel->angular.z);
+    lastSentTime = ros::Time::now();
+    allowNewMsg = true;
 }
 
 extern "C" int Init( Model* mod )
@@ -80,8 +109,9 @@ extern "C" int Init( Model* mod )
     char** argv;
     ros::init( argc, argv, "target_controller_node");
     n = new ros::NodeHandle();
+    lastSentTime = ros::Time::now();
     pub_state_ = n->advertise<dqn_stage_ros::stage_message>("input_data", 15);
-
+    sub_vel_ = n->subscribe( "inputdata", 15, &rosVelocityCB);
     robot = new ModelRobot;
     robot->pos = (ModelPosition*) mod;
     robot->pos->AddCallback( Model::CB_UPDATE, (model_callback_t)stgPoseUpdateCB, robot);
