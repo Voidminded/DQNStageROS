@@ -60,7 +60,7 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
         for(unsigned int i = 0; i < sensor.ranges.size(); i++)
         {
             laserMsgs.ranges[i] = sensor.ranges[i];
-            if(sensor.ranges[i] < 0.3)
+            if(sensor.ranges[i] < 0.45)
                 collision = true;
             if( i > (sensor.fov*180.0/M_PI - 45)/2 && i < (sensor.fov*180.0/M_PI + 45)/2 && sensor.ranges[i]  < minFrontDist)
                 minFrontDist = sensor.ranges[i];
@@ -111,7 +111,7 @@ extern "C" int Init( Model* mod )
     n = new ros::NodeHandle();
     lastSentTime = ros::Time::now();
     pub_state_ = n->advertise<dqn_stage_ros::stage_message>("input_data", 15);
-    sub_vel_ = n->subscribe( "inputdata", 15, &rosVelocityCB);
+    sub_vel_ = n->subscribe( "cmd_vel", 15, &rosVelocityCB);
     robot = new ModelRobot;
     robot->pos = (ModelPosition*) mod;
     robot->pos->AddCallback( Model::CB_UPDATE, (model_callback_t)stgPoseUpdateCB, robot);

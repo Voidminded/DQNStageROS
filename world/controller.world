@@ -52,14 +52,22 @@ floorplan
 
 )
 
-define agent pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
+define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
 (
+  drive "diff"      # Differential steering model.
+  gui_nose 1                    # Draw a nose on the robot so we can see which way it points
+  obstacle_return 1             # Can hit things.
+  ranger_return 0.5             # reflects sonar beams
+  blob_return 1                 # Seen by blobfinders  
+  fiducial_return 1             # Seen as "1" fiducial finders
+	size [ 0.3 0.3 0.3 ]
+
   color "random"
   localization "gps"
   localization_origin [ 0 0 0 0 ]
-  gui_nose 0
-  laser_return 1
-  obstacle_return 1
+  #gui_nose 0
+  #laser_return 1
+  #obstacle_return 0
   sicklaser(
 	pose [ 0 0 0 0 ] 
 	)
