@@ -1,18 +1,17 @@
 #include <stage.hh>
 #include "ros/ros.h"
-#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Pose.h>
 
 using namespace Stg;
 Model* target;
 ros::NodeHandle* n;
 ros::Subscriber sub;
 
-void updateCB(const geometry_msgs::PoseStampedConstPtr &pose)
+void updateCB(const geometry_msgs::PoseConstPtr &pose)
 {
-    ROS_WARN("ROS Sub");
     Pose p;
-    p.x = pose->pose.position.x;
-    p.y = pose->pose.position.y;
+    p.x = pose->position.x;
+    p.y = pose->position.y;
     p.z = 0;
     target->SetPose( p);
     return;

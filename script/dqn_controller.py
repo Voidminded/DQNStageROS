@@ -27,7 +27,7 @@ flags = tensor.app.flags
 Map_Max_Dist = 40.0
 
 # Deep q Network
-flags.DEFINE_boolean('use_gpu', False, 'Whether to use gpu or not. gpu use NHWC and gpu use NCHW for data_format')
+flags.DEFINE_boolean('use_gpu', True, 'Whether to use gpu or not. gpu use NHWC and gpu use NCHW for data_format')
 flags.DEFINE_string('agent_type', 'DQN', 'The type of agent [DQN]')
 flags.DEFINE_boolean('double_q', False, 'Whether to use double Q-learning')
 flags.DEFINE_string('network_header_type', 'nature', 'The type of network header [mlp, nature, nips]')
@@ -39,7 +39,7 @@ flags.DEFINE_integer('max_random_start', 0, 'The maximum number of NOOP actions 
 flags.DEFINE_integer('history_length', 4, 'The length of history of observation to use as an input to DQN')
 flags.DEFINE_integer('max_r', +999999999, 'The maximum value of clipped reward')
 flags.DEFINE_integer('min_r', 0, 'The minimum value of clipped reward')
-flags.DEFINE_string('observation_dims', '[80, 80]', 'The dimension of gym observation')
+flags.DEFINE_string('observation_dims', '[84, 84]', 'The dimension of gym observation')
 flags.DEFINE_boolean('random_start', False, 'Whether to start with random state')
 flags.DEFINE_boolean('use_cumulated_reward', False, 'Whether to use cumulated reward or not')
 
@@ -76,7 +76,7 @@ flags.DEFINE_float('gamma', 0.99, 'Discount factor of return')
 flags.DEFINE_float('beta', 0.01, 'Beta of RMSProp optimizer')
 
 # Debug
-flags.DEFINE_boolean('display', False, 'Whether to do display the game screen or not')
+flags.DEFINE_boolean('display', True, 'Whether to do display the game screen or not')
 flags.DEFINE_string('log_level', 'INFO', 'Log level [DEBUG, INFO, WARNING, ERROR, CRITICAL]')
 flags.DEFINE_integer('random_seed', 123, 'Value of random seed')
 flags.DEFINE_string('tag', '', 'The name of tag for a model, only for debugging')
@@ -131,9 +131,11 @@ class StageEnvironment(object):
     self.ep_reward = 0.0
     self.readyForNewData = True
     self.terminal = 0
+    self.sendTerminal = 0
+    self.minFrontDist = 6
     
-    #rospy.wait_for_service('reset_positions')
-    #self.resetStage = rospy.ServiceProxy('reset_positions', EmptySrv)
+    rospy.wait_for_service('reset_positions')
+    self.resetStage = rospy.ServiceProxy('reset_positions', EmptySrv)
 
     
     # Subscribers:
@@ -142,24 +144,26 @@ class StageEnvironment(object):
     # publishers:
     self.pub_vel_ = rospy.Publisher('cmd_vel', Twist, queue_size = 10)
     self.pub_rew_ = rospy.Publisher("lastreward",Float64,queue_size=10)
-    self.pub_goal_ = rospy.Publisher("goal", Pose, queue_size = 15) 
+    self.pub_goal_ = rospy.Publisher("target", Pose, queue_size = 15) 
 
   def new_game(self):
-    #self.resetStage()
+    self.resetStage()
     self.terminal = 0
+    self.sendTerminal = 0
     #Select a new goal
     d = -1
     while d < 3.9:
       theta = 2.0 * np.pi * random.random()
-      r = random.random()*21
+      r = random.random()*19.5
       self.goalPose.position.x = r*np.cos( theta)
       self.goalPose.position.y = r*np.sin( theta)
       d = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
     self.pub_goal_.publish( self.goalPose)
     self.prevDist = d
-    self.readyForNewData = False
+    self.readyForNewData = True
     self.numWins = 0
     self.ep_reward = 0.0
+    self.actionToVel( 0)
     return self.screen, 0, 0
 
   def new_random_game(self):
@@ -169,18 +173,21 @@ class StageEnvironment(object):
     #pass
 
   def step(self, action, is_training):
-    if action == -1:
-      # Step with random action
-      action = int(random.random()*(self.action_size))
+    if self.terminal == 0:
+      if action == -1:
+        # Step with random action
+        action = int(random.random()*(self.action_size))
+      self.actionToVel( action)
+      self.readyForNewData = True
 
-    self.actionToVel( action)
-    self.readyForNewData = True
     if self.display:
       cv2.imshow("Screen", self.screen)
-      cv2.waitKey(30)
+      cv2.waitKey(3)
 
     dist = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
-    reward = max( 0, (self.prevDist - dist + 1.8)/10.0)
+    #near obstacle penalty factor:
+    nearObstPenalty = self.minFrontDist - 1.5
+    reward = max( 0, ((self.prevDist - dist + 1.8)*3/dist)+min( 0, nearObstPenalty))
     self.prevDist = dist
     if dist < 0.9:
       reward += 300
@@ -188,7 +195,7 @@ class StageEnvironment(object):
       d = -1
       while d < 3.9:
         theta = 2.0 * np.pi * random.random()
-        r = random.random()*21
+        r = random.random()*19.5
         self.goalPose.position.x = r*np.cos( theta)
         self.goalPose.position.y = r*np.sin( theta)
         d = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
@@ -205,17 +212,18 @@ class StageEnvironment(object):
     # Add whatever info you want
     info = ""
     self.ep_reward += reward
-    if self.terminal == 1:
+    if self.terminal == 1: 
       rewd = Float64()
       rewd.data = self.ep_reward
       self.pub_rew_.publish( rewd)
 
+    self.sendTerminal = self.terminal
     while( self.readyForNewData == True):
       pass
     if self.use_cumulated_reward:
-      return self.screen, self.ep_reward, self.terminal, info
+      return self.screen, self.ep_reward, self.sendTerminal, info
     else:
-      return self.screen, reward, self.terminal, info
+      return self.screen, reward, self.sendTerminal, info
     
     #observation, reward, terminal, info = self.env.step(action)
     #return self.preprocess(observation), reward, terminal, info
@@ -245,9 +253,9 @@ class StageEnvironment(object):
       self.pub_vel_.publish( msg)
 
   def stageCB( self, data):
-    if len(data.laser.ranges) < 1 or self.readyForNewData == False:
+    #if len(data.laser.ranges) < 1 or self.readyForNewData == False:
       #print "limitted by GPU !!!!"
-      return
+     # return
     
     # pose stuff
     self.robotPose = data.position.pose
@@ -282,10 +290,10 @@ class StageEnvironment(object):
    
     #steering guide:
     for i in range( rad*2, self.observation_dims[0]):
-      stir = (dirToTarget*40/180)+40
-      minStir = min( stir, 40)
-      maxStir = max( stir, 40)
-      for j in range( 0, 80):
+      stir = (dirToTarget*self.observation_dims[0]/360)+self.observation_dims[0]/2
+      minStir = min( stir, self.observation_dims[0]/2)
+      maxStir = max( stir, self.observation_dims[0]/2)
+      for j in range( 0, self.observation_dims[0]):
         if j > minStir and j < maxStir:
           self.screen[i ,j] = 0
         else:
@@ -303,6 +311,7 @@ class StageEnvironment(object):
 
     if data.collision == True:
     	self.terminal = 1 
+    self.minFrontDist = data.minFrontDist
     self.readyForNewData = False
 
 def main(_):
