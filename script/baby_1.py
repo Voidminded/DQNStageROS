@@ -133,6 +133,9 @@ class StageEnvironment(object):
     self.terminal = 0
     self.sendTerminal = 0
     self.minFrontDist = 6
+
+    self.r = 1
+    self.ang = 0
     
     rospy.wait_for_service('reset_positions')
     self.resetStage = rospy.ServiceProxy('reset_positions', EmptySrv)
@@ -151,15 +154,11 @@ class StageEnvironment(object):
     self.terminal = 0
     self.sendTerminal = 0
     #Select a new goal
-    d = -1
-    while d < 3.9:
-      theta = 2.0 * np.pi * random.random()
-      r = random.random()*19.5
-      self.goalPose.position.x = r*np.cos( theta)
-      self.goalPose.position.y = r*np.sin( theta)
-      d = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
+    theta =  self.ang*random.random()
+    self.goalPose.position.x = self.r*np.cos( theta)
+    self.goalPose.position.y = self.r*np.sin( theta)
     self.pub_goal_.publish( self.goalPose)
-    self.prevDist = d
+    self.prevDist = 0
     self.readyForNewData = True
     self.numWins = 0
     self.ep_reward = 0.0
@@ -186,33 +185,34 @@ class StageEnvironment(object):
 
     dist = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
     #near obstacle penalty factor:
-    nearObstPenalty = self.minFrontDist - 1.5
-    reward = max( 0, ((self.prevDist - dist + 1.8)*3/dist)+min( 0, nearObstPenalty))
-    self.prevDist = dist
-    if dist < 0.9:
-      reward += 300
+    #nearObstPenalty = self.minFrontDist - 1.5
+    #reward = max( 0, ((self.prevDist - dist + 1.8)*3/dist)+min( 0, nearObstPenalty))
+    #self.prevDist = dist
+    reward = 0
+    if dist < 0.3:
+      reward += 1
       #Select a new goal
-      d = -1
-      while d < 3.9:
-        theta = 2.0 * np.pi * random.random()
-        r = random.random()*19.5
-        self.goalPose.position.x = r*np.cos( theta)
-        self.goalPose.position.y = r*np.sin( theta)
-        d = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
+      theta =  self.ang*random.random()
+      self.goalPose.position.x = self.r*np.cos( theta)
+      self.goalPose.position.y = self.r*np.sin( theta)
       self.pub_goal_.publish( self.goalPose)
-      self.prevDist = d
       rwd = Float64()
       rwd.data = 10101.963
       self.pub_rew_.publish( rwd)
       self.numWins += 1
-      if self.numWins == 99:
-        reward += 9000
-        self.terminal = 1
+      if self.numWins == 999:
+        if self.ang < np.pi:
+          elf.r += 1
+          elf.ang += float(int(self.r/20)/10.0)
+          elf.r %=20
+        self.nimWins = 0
+      self.resetStage()
     
     # Add whatever info you want
     info = ""
     self.ep_reward += reward
-    if self.terminal == 1: 
+    if self.terminal == 1:
+      reward = -1 
       rewd = Float64()
       rewd.data = self.ep_reward
       self.pub_rew_.publish( rewd)
@@ -266,53 +266,53 @@ class StageEnvironment(object):
     dirToTarget = self.constrainAngle( robotOri- angleBetween)
 
     self.screen[:] = 128
-    x = int(data.laser.range_max* 10)
-    y = int(data.laser.range_max*10)
+    x = self.observation_dims[0]/2
+    y = self.observation_dims[1]/2
     rad = int(data.laser.range_max*10)
     
     # Occupancy grid:
     for i in range(0, 360):
       for j in range( 0, rad):
         if data.laser.ranges[i]*10 >= j:
-          self.screen[ x + int(j* np.cos( np.pi*i/180.0)), y + int( j* np.sin( np.pi*i/180.0))] = 255
+          self.setPixel( x + int(j* np.cos( np.pi*i/180.0)), y + int( j* np.sin( np.pi*i/180.0)) ,192)
       if data.laser.ranges[i] < data.laser.range_max:
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1] = 0
-        self.screen[ x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2] = 0
-      #if scan.ranges[i] < 0.66:
-      #  boomed = True
-   
-    #steering guide:
-    for i in range( rad*2, self.observation_dims[0]):
-      stir = (dirToTarget*self.observation_dims[0]/360)+self.observation_dims[0]/2
-      minStir = min( stir, self.observation_dims[0]/2)
-      maxStir = max( stir, self.observation_dims[0]/2)
-      for j in range( 0, self.observation_dims[0]):
-        if j > minStir and j < maxStir:
-          self.screen[i ,j] = 0
-        else:
-          self.screen[ i, j] = 255
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
+        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
     
-    #Distance info:
-    dist = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
-    normDist = 72*dist/Map_Max_Dist
-    for j in range( rad*2, self.observation_dims[1]):
-      for i in range(0, 72):
-        if i <= normDist:
-          self.screen[i, j] = 0
-        else:
-          self.screen[i, j] = 255 
-
+    # Gradient:
+#    R = np.matrix('{} {}; {} {}'.format(np.cos( np.radians( -dirToTarget)), -np.sin( np.radians( -dirToTarget)), np.sin( np.radians( -dirToTarget)), np.cos( np.radians( -dirToTarget))))
+    tempScr = np.zeros(( self.observation_dims[0], self.observation_dims[1]))
+    for i in range( 0, self.observation_dims[0]):
+      for j in range( 0, self.observation_dims[1]):
+        x = int( (i- self.observation_dims[0]/2) * np.cos( np.pi+yaw) + (j - self.observation_dims[1]/2) * -np.sin( np.pi+yaw))
+        y = int( (i- self.observation_dims[0]/2) * np.sin( np.pi+yaw) + (j - self.observation_dims[1]/2) * np.cos( np.pi+yaw))
+        tempScr[ i][ j] = np.sqrt( (self.robotPose.position.x + x/10 - self.goalPose.position.x)**2 + (self.robotPose.position.y +  y /10 - self.goalPose.position.y)**2)
+    tempScr -= np.min( tempScr)
+    tempScr /= np.max( tempScr)
+    for i in range( 0, self.observation_dims[0]):
+      for j in range( 0, self.observation_dims[1]):
+        self.addPixel( i, j, 63.0*(1-tempScr[ i][ j])) 
     if data.collision == True:
     	self.terminal = 1 
     self.minFrontDist = data.minFrontDist
     self.readyForNewData = False
+
+  def setPixel( self, x, y, val):
+    if x < 0 or x >= self.observation_dims[0] or y < 0 or y >= self.observation_dims[1]:
+      return
+    self.screen[ x, y] = val
+    
+  def addPixel( self, x, y, val):
+    if x < 0 or x >= self.observation_dims[0] or y < 0 or y >= self.observation_dims[1]:
+      return
+    self.screen[ x, y] += val
 
 def main(_):
   # preprocess

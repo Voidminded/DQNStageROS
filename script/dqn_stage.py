@@ -324,7 +324,7 @@ class StageEnvironment(object):
       rospy.logerr( "Invalid action %d", action)
     else:
       w = ((action % 7)-3)/3.0
-      f = 0.3*(action % 7)
+      f = 0.3*(action / 7)
       msg = Twist()
       msg.angular.x = 0
       msg.angular.y = 0
