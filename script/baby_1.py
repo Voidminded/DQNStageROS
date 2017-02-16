@@ -200,11 +200,11 @@ class StageEnvironment(object):
       rwd.data = 10101.963
       self.pub_rew_.publish( rwd)
       self.numWins += 1
-      if self.numWins == 999:
+      if self.numWins == 99:
         if self.ang < np.pi:
-          elf.r += 1
-          elf.ang += float(int(self.r/20)/10.0)
-          elf.r %=20
+          self.r += 1
+          self.ang += float(int(self.r/20)/10.0)
+          self.r %=20
         self.nimWins = 0
       self.resetStage()
     

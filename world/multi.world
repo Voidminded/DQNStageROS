@@ -1,0 +1,133 @@
+# simple.world - basic world file example
+# Authors: Richard Vaughan, Sepehr
+# $Id$
+
+include "pioneer.inc"
+include "map.inc"
+include "sick.inc"
+
+paused 			0
+speedup 		-1.000
+show_clock 	0
+show_clock_interval 10000
+resolution 	0.2
+threads 	4	
+
+# configure the GUI window
+window
+(
+  size [ 1920 1179 ] # in pixels
+  
+# Camera options 
+	scale 28.346            
+  center [ -3.449  0.068 ]
+  rotate [ 0.000  0.000 ]
+
+# perspective camera options
+  pcam_loc [ 0.000 -4.000 2.000 ]
+  pcam_angle [ 70.000 0.000 ]
+
+# GUI options
+  show_data 1
+  show_flags 1
+  show_blocks 1
+  show_clock 1
+  show_footprints 0
+  show_grid 1
+  show_trailarrows 0
+  show_trailrise 0
+  show_trailfast 0
+  show_occupancy 0
+  pcam_on 0
+  screenshots 0
+)
+
+floorplan
+(
+  name "blank"
+  size [40.000 40.000 0.800]
+  pose [0.000 0.000 0.000 0.000]
+  bitmap "rink.png"
+  obstacle_return 0
+
+)
+
+define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
+(
+  drive "diff"      # Differential steering model.
+  gui_nose 1                    # Draw a nose on the robot so we can see which way it points
+  obstacle_return 0             # Can hit things.
+  ranger_return 0.500             # reflects sonar beams
+  blob_return 1                 # Seen by blobfinders  
+  fiducial_return 1             # Seen as "1" fiducial finders
+	size [ 0.300 0.300 0.300 ]
+
+  color "random"
+  localization "gps"
+  localization_origin [ 0 0 0 0 ]
+  #gui_nose 0
+  #laser_return 1
+  #obstacle_return 0
+  sicklaser(
+	pose [ 0.000 0.000 0.000 0.000 ] 
+	)
+	ctrl "libmulti_robot_ctrl" 
+)
+
+#agent( pose [3.000 3.000 0.000 0.000 ])
+#agent( pose [-2.000 1.000 0.000 0.000 ])
+#agent( pose [-3 -3 0 0 ])
+
+
+zone (
+		name "t0"
+		pose [ -5.601 -1.530 0.000 0.000 ]
+		size [ 0.300 0.300 0.000 0 ]
+		color "cyan"
+		ctrl "libmulti_target_ctrl"
+		fiducial()
+		)
+
+zone (
+		name "t1"
+		pose [ -1.601 -1.530 0.000 0.000 ]
+		size [ 0.300 0.300 0.000 0 ]
+		color "magenta"
+		ctrl "libmulti_target_ctrl"
+		fiducial()
+		)
+zone (
+		name "t2"
+		pose [ -5.601 -0.530 0.000 0.000 ]
+		size [ 0.300 0.300 0.000 0 ]
+		color "black"
+		ctrl "libmulti_target_ctrl"
+		fiducial()
+		)
+#position
+#    (
+#    # position properties
+#    velocity [ 0.0 0.0 0.0 0.0 ]
+#    localization "gps"
+#		name "target"
+#		pose [ 0 0 0 0 ]
+#		size [ 0.3 0.3 0 0 ]
+#		color "cyan"
+#		ctrl "libtarget_ctrl"
+#   )
+#
+agent( 
+	name "r0"
+	pose [0.000 0.000 0.000 0.000 ]
+  color "cyan"
+	)
+agent( 
+	name "r1"
+	pose [1.000 0.000 0.000 0.000 ]
+  color "magenta"
+	)
+agent( 
+	name "r2"
+	pose [2.000 0.000 0.000 0.000 ]
+  color "black"
+	)

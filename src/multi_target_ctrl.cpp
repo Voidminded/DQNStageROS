@@ -28,8 +28,10 @@ extern "C" int Init( Model* mod )
 { 
   int argc = 0;
   char** argv;
-  ros::init( argc, argv, "target_controller_node");
-  n = new ros::NodeHandle();
+  std::string name = mod->TokenStr();
+  ros::init( argc, argv, name+"_target_controller_node");
+  n = new ros::NodeHandle(name);
+  std::cout << "Target for " << name << " Inited" << std::endl;
   sub = n->subscribe("target", 15, &updateCB);
   target = /*(ModelPosition* )*/mod;
 
