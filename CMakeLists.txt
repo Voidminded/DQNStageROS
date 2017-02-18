@@ -145,13 +145,13 @@ include_directories(
    src/baby_ctrl.cpp
  )
 
- add_library(multi_target_ctrl
-   src/multi_target_ctrl.cpp
- )
-
- add_library(multi_robot_ctrl
-   src/multi_robot_ctrl.cpp
- )
+# add_library(multi_target_ctrl
+#   src/multi_target_ctrl.cpp
+# )
+#
+# add_library(multi_robot_ctrl
+#   src/multi_robot_ctrl.cpp
+# )
 add_executable(dqn_stage_bridge_node src/dqn_stage_bridge.cpp)
 
 ## Add cmake target dependencies of the library
@@ -160,7 +160,7 @@ add_executable(dqn_stage_bridge_node src/dqn_stage_bridge.cpp)
 # add_dependencies(DQNStageROS ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(robot_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(baby_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(multi_robot_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#add_dependencies(multi_robot_ctrl ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
 # add_executable(DQNStageROS_node src/DQNStageROS_node.cpp)
@@ -186,14 +186,38 @@ target_link_libraries(baby_ctrl
   ${catkin_LIBRARIES}
   ${STAGE_LIBRARIES}
 )
-target_link_libraries(multi_target_ctrl
+#target_link_libraries(multi_target_ctrl
+#  ${catkin_LIBRARIES}
+#  ${STAGE_LIBRARIES}
+#)
+#target_link_libraries(multi_robot_ctrl
+#  ${catkin_LIBRARIES}
+#  ${STAGE_LIBRARIES}
+#)
+
+
+#MultiRotobt build thingy:
+
+
+foreach( NUM RANGE 16)
+ add_library(multi_target_ctrl_${NUM}
+   src/multi_target_ctrl.cpp
+ )
+
+ add_library(multi_robot_ctrl_${NUM}
+   src/multi_robot_ctrl.cpp
+ )
+add_dependencies(multi_robot_ctrl_${NUM} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(multi_target_ctrl_${NUM}
   ${catkin_LIBRARIES}
   ${STAGE_LIBRARIES}
 )
-target_link_libraries(multi_robot_ctrl
+target_link_libraries(multi_robot_ctrl_${NUM}
   ${catkin_LIBRARIES}
   ${STAGE_LIBRARIES}
 )
+
+endforeach(NUM)
 
 #############
 ## Install ##
