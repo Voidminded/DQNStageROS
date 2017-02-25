@@ -70,6 +70,7 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
   #obstacle_return 0
   sicklaser(
   ranger_return -1
+  obstacle_return 0
 	pose [ 0.000 0.000 0.000 0.000 ] 
 	)
 	ctrl "libmulti_robot_ctrl" 
@@ -165,43 +166,43 @@ agent(
 	)
 agent( 
 	name "r1"
-	pose [1.000 0.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 45 ]
   color "magenta"
   ctrl "libmulti_robot_ctrl_1"
 	)
 agent( 
 	name "r2"
-	pose [2.000 0.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 90 ]
   color "black"
   ctrl "libmulti_robot_ctrl_2"
 	)
 agent( 
 	name "r3"
-	pose [3.000 0.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 135 ]
   color "red"
   ctrl "libmulti_robot_ctrl_3"
 	)
 agent( 
 	name "r4"
-	pose [0.000 1.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 180 ]
   color "blue"
   ctrl "libmulti_robot_ctrl_4"
 	)
 agent( 
 	name "r5"
-	pose [1.000 1.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 225 ]
   color "yellow"
   ctrl "libmulti_robot_ctrl_5"
 	)
 agent( 
 	name "r6"
-	pose [2.000 1.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 270 ]
   color "green"
   ctrl "libmulti_robot_ctrl_6"
 	)
 agent( 
 	name "r7"
-	pose [3.000 1.000 0.000 0.000 ]
+	pose [0.000 0.000 0.000 315 ]
   color "white"
   ctrl "libmulti_robot_ctrl_7"
 	)

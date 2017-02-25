@@ -84,8 +84,8 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
       laserMsgs.header.stamp = ros::Time::now();
       rosLaserData = laserMsgs;
     }
-  if( minDist > 3.3 && (double(rand())/RAND_MAX) > 0.1)
-    robot->resetPose = robot->pos->GetPose();
+//  if( minDist > 3.3 && (double(rand())/RAND_MAX) > 0.1)
+//    robot->resetPose = robot->pos->GetPose();
 
   if( robot->pos->GetWorld()->SimTimeNow() - stgSpeedTime > 100000)
     robot->pos->SetSpeed( 0, 0, 0);
