@@ -47,7 +47,7 @@ floorplan
   name "blank"
   size [40.000 40.000 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "rink.png"
+  bitmap "sparse-rink.png"
   obstacle_return 0
 
 )
@@ -130,22 +130,22 @@ zone (
 		ctrl "libmulti_target_ctrl_5"
 		fiducial()
 		)
-zone (
-		name "t6"
-		pose [ -5.601 -2.530 0.000 0.000 ]
-		size [ 0.300 0.300 0.000 0 ]
-		color "green"
-		ctrl "libmulti_target_ctrl_6"
-		fiducial()
-		)
-zone (
-		name "white"
-		pose [ -5.601 -1.530 0.000 0.000 ]
-		size [ 0.300 0.300 0.000 0 ]
-		color "black"
-		ctrl "libmulti_target_ctrl_7"
-		fiducial()
-		)
+#zone (
+#		name "t6"
+#		pose [ -5.601 -2.530 0.000 0.000 ]
+#		size [ 0.300 0.300 0.000 0 ]
+#		color "green"
+#		ctrl "libmulti_target_ctrl_6"
+#		fiducial()
+#		)
+#zone (
+#		name "t7"
+#		pose [ -5.601 -1.530 0.000 0.000 ]
+#		size [ 0.300 0.300 0.000 0 ]
+#		color "white"
+#		ctrl "libmulti_target_ctrl_7"
+#		fiducial()
+#		)
 #position
 #    (
 #    # position properties
@@ -194,15 +194,15 @@ agent(
   color "yellow"
   ctrl "libmulti_robot_ctrl_5"
 	)
-agent( 
-	name "r6"
-	pose [0.000 0.000 0.000 270 ]
-  color "green"
-  ctrl "libmulti_robot_ctrl_6"
-	)
-agent( 
-	name "r7"
-	pose [0.000 0.000 0.000 315 ]
-  color "white"
-  ctrl "libmulti_robot_ctrl_7"
-	)
+#agent( 
+#	name "r6"
+#	pose [0.000 0.000 0.000 270 ]
+#  color "green"
+#  ctrl "libmulti_robot_ctrl_6"
+#	)
+#agent( 
+#	name "r7"
+#	pose [0.000 0.000 0.000 315 ]
+#  color "white"
+#  ctrl "libmulti_robot_ctrl_7"
+#	)
