@@ -39,9 +39,8 @@ def create_stage_env(env_id, client_id, remotes, **_):
 
 def _process_stage_frame(frame):
     if( isinstance(frame, tuple)):
-        print("tuppled")
         frame = frame[0]
-    frame = cv2.resize( frame, (42, 42))
+    #frame = cv2.resize( frame, (42, 42))
     frame = frame.astype(np.float32)
     frame *= (1.0 / 255.0)
     frame = np.reshape(frame, [42, 42, 1])

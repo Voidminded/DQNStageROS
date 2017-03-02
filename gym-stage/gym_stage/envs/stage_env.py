@@ -21,7 +21,7 @@ import random
 class StageEnv(gym.Env):
   metadata = {'render.modes': ['human']}
 
-  def __init__(self, observation_dims=[80, 80]):
+  def __init__(self, observation_dims=[42, 42]):
     self.viewer = None
     self.observation_dims = observation_dims
     # action space: continious forward speed [0, 1.8] and turning speed [-1, 1] 
@@ -72,7 +72,6 @@ class StageEnv(gym.Env):
     #self.prevDist = dist
     reward = 0
     if dist < 0.3:
-      rospy.logwarn("reached ?!")
       reward += 1
       self.selectNewGoal()
       rwd = Float64()
@@ -103,7 +102,6 @@ class StageEnv(gym.Env):
     return self.screen, reward, self.sendTerminal, info
 
   def _reset(self):
-    rospy.logerr("Reset !? :O")
     self.resetStage()
     self.terminal = False
     self.sendTerminal = False
@@ -173,23 +171,24 @@ class StageEnv(gym.Env):
     self.screen[:] = 128
     x = self.observation_dims[0]/2
     y = self.observation_dims[1]/2
-    rad = int(data.laser.range_max*10)
     
     # Occupancy grid:
+    c = 5.25
+    rad = int(data.laser.range_max*c)
     for i in range(0, 360):
       for j in range( 0, rad):
-        if data.laser.ranges[i]*10 >= j:
+        if data.laser.ranges[i]*c >= j:
           self.setPixel( x + int(j* np.cos( np.pi*i/180.0)), y + int( j* np.sin( np.pi*i/180.0)) ,192)
       if data.laser.ranges[i] < data.laser.range_max:
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
-        self.setPixel( x + int( 10*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( 10*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180)), y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180))-1, y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180)), 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180))-1, 0)
+        self.setPixel( x + int( c*data.laser.ranges[i]*np.cos( np.pi*i/180))-2, y + int( c*data.laser.ranges[i]*np.sin( np.pi*i/180))-2, 0)
     
     # Gradient:
 #    R = np.matrix('{} {}; {} {}'.format(np.cos( np.radians( -dirToTarget)), -np.sin( np.radians( -dirToTarget)), np.sin( np.radians( -dirToTarget)), np.cos( np.radians( -dirToTarget))))
@@ -198,7 +197,7 @@ class StageEnv(gym.Env):
       for j in range( 0, self.observation_dims[1]):
         x = int( (i- self.observation_dims[0]/2) * np.cos( np.pi+yaw) + (j - self.observation_dims[1]/2) * -np.sin( np.pi+yaw))
         y = int( (i- self.observation_dims[0]/2) * np.sin( np.pi+yaw) + (j - self.observation_dims[1]/2) * np.cos( np.pi+yaw))
-        tempScr[ i][ j] = np.sqrt( (self.robotPose.position.x + x/10 - self.goalPose.position.x)**2 + (self.robotPose.position.y +  y /10 - self.goalPose.position.y)**2)
+        tempScr[ i][ j] = np.sqrt( (self.robotPose.position.x + x/10.0 - self.goalPose.position.x)**2 + (self.robotPose.position.y +  y /10.0 - self.goalPose.position.y)**2)
     tempScr -= np.min( tempScr)
     tempScr /= np.max( tempScr)
     for i in range( 0, self.observation_dims[0]):

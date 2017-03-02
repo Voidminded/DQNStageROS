@@ -119,7 +119,6 @@ void rosVelocityCB( const geometry_msgs::TwistConstPtr vel)
 
 bool rosResetSrvCB(std_srvs::Empty::Request& request, std_srvs::Empty::Response& response)
 {
-  ROS_INFO("Resetting stage!");
   robot->pos->SetPose( robot->resetPose);
   return true;
 }
