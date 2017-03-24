@@ -7,49 +7,29 @@ include "map.inc"
 include "sick.inc"
 
 paused 			0
-speedup 		-1.000
 show_clock 	0
 show_clock_interval 10000
-resolution 	0.01
+resolution 	0.02
 threads 	8	
 
 # configure the GUI window
 window
-(
-  size [ 1920 1179 ] # in pixels
-  
-# Camera options 
-	scale 28.346            
-  center [ -3.449  0.068 ]
-  rotate [ 0.000  0.000 ]
+( 
+  size [ 1020.000 724.000 ]
+  center [-24.574 -17.333]
+  rotate [ 38.000 -36.500 ]
+  scale 12.611 
 
-# perspective camera options
-  pcam_loc [ 0.000 -4.000 2.000 ]
-  pcam_angle [ 70.000 0.000 ]
-
-# GUI options
   show_data 1
-  show_flags 1
-  show_blocks 1
-  show_clock 1
-  show_footprints 0
-  show_grid 1
-  show_trailarrows 0
-  show_trailrise 0
-  show_trailfast 0
-  show_occupancy 0
-  pcam_on 0
-  screenshots 0
+  interval 200
 )
 
+# load an environment bitmap
 floorplan
-(
-  name "blank"
-  size [40.000 40.000 0.800]
-  pose [0.000 0.000 0.000 0.000]
-  bitmap "rinkSFU.png"
-  obstacle_return 0
-
+( 
+  size [140.000 60.000 0.500]
+  pose [0 0.500 0 0] 
+  bitmap "hospital.png"
 )
 
 define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_base_no_sonar
@@ -84,7 +64,7 @@ define agent position # pioneer2dx_base_no_sonar #fancypioneer2dx #pioneer2dx_ba
 zone (
 		name "t0"
 		pose [ -5.601 -1.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "cyan"
 		ctrl "libmulti_target_ctrl_0"
 		fiducial()
@@ -93,7 +73,7 @@ zone (
 zone (
 		name "t1"
 		pose [ -1.601 -1.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "magenta"
 		ctrl "libmulti_target_ctrl_1"
 		fiducial()
@@ -101,7 +81,7 @@ zone (
 zone (
 		name "t2"
 		pose [ -5.601 -6.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "black"
 		ctrl "libmulti_target_ctrl_2"
 		fiducial()
@@ -109,7 +89,7 @@ zone (
 zone (
 		name "t3"
 		pose [ -5.601 -5.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "red"
 		ctrl "libmulti_target_ctrl_3"
 		fiducial()
@@ -117,7 +97,7 @@ zone (
 zone (
 		name "t4"
 		pose [ -5.601 -4.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "blue"
 		ctrl "libmulti_target_ctrl_4"
 		fiducial()
@@ -125,7 +105,7 @@ zone (
 zone (
 		name "t5"
 		pose [ -5.601 -3.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "yellow"
 		ctrl "libmulti_target_ctrl_5"
 		fiducial()
@@ -133,7 +113,7 @@ zone (
 zone (
 		name "t6"
 		pose [ -5.601 -2.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "green"
 		ctrl "libmulti_target_ctrl_6"
 		fiducial()
@@ -141,7 +121,7 @@ zone (
 zone (
 		name "t7"
 		pose [ -5.601 -1.530 0.000 0.000 ]
-		size [ 0.120 0.120 0.000 0 ]
+		size [ 0.300 0.300 0.000 0 ]
 		color "white"
 		ctrl "libmulti_target_ctrl_7"
 		fiducial()
@@ -160,49 +140,49 @@ zone (
 #
 agent( 
 	name "r0"
-	pose [0.000 0.000 0.000 0.000 ]
+	pose [-5.000 -18.000 0.000 0.000 ]
   color "cyan"
   ctrl "libmulti_robot_ctrl_0"
 	)
 agent( 
 	name "r1"
-	pose [0.000 0.000 0.000 45 ]
+	pose [-5.000 -18.000 0.000 45 ]
   color "magenta"
   ctrl "libmulti_robot_ctrl_1"
 	)
 agent( 
 	name "r2"
-	pose [0.000 0.000 0.000 90 ]
+	pose [-5.000 -18.000 0.000 90 ]
   color "black"
   ctrl "libmulti_robot_ctrl_2"
 	)
 agent( 
 	name "r3"
-	pose [0.000 0.000 0.000 135 ]
+	pose [-5.000 -18.000 0.000 135 ]
   color "red"
   ctrl "libmulti_robot_ctrl_3"
 	)
 agent( 
 	name "r4"
-	pose [0.000 0.000 0.000 180 ]
+	pose [-5.000 -18.000 0.000 180 ]
   color "blue"
   ctrl "libmulti_robot_ctrl_4"
 	)
 agent( 
 	name "r5"
-	pose [0.000 0.000 0.000 225 ]
+	pose [-5.000 -18.000 0.000 225 ]
   color "yellow"
   ctrl "libmulti_robot_ctrl_5"
 	)
 agent( 
 	name "r6"
-	pose [0.000 0.000 0.000 270 ]
+	pose [-5.000 -18.000 0.000 270 ]
   color "green"
   ctrl "libmulti_robot_ctrl_6"
 	)
 agent( 
 	name "r7"
-	pose [0.000 0.000 0.000 315 ]
+	pose [-5.000 -18.000 0.000 315 ]
   color "white"
   ctrl "libmulti_robot_ctrl_7"
 	)

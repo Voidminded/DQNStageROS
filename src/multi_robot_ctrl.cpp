@@ -49,6 +49,8 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
   double minDist = sensor.range.max;
   if( sensor.ranges.size() )
     {
+      if( sensor.ranges.size() < 360 )
+        ROS_INFO_STREAM("Lasers: " << sensor.ranges.size());
       // Translate into ROS message format and publish
       laserMsgs.angle_min = -sensor.fov/2.0;
       laserMsgs.angle_max = +sensor.fov/2.0;
@@ -65,7 +67,7 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
       for(unsigned int i = 0; i < sensor.ranges.size(); i++)
         {
           laserMsgs.ranges[i] = sensor.ranges[i];
-          if(sensor.ranges[i] < 0.45)
+          if(sensor.ranges[i] < 0.1)
             collision = true;
           if( i > (sensor.fov*180.0/M_PI - 45)/2 && i < (sensor.fov*180.0/M_PI + 45)/2 && sensor.ranges[i]  < minFrontDist)
             minFrontDist = sensor.ranges[i];
@@ -96,6 +98,7 @@ void stgLaserCB( Model* mod, ModelRobot* robot)
       && laserMsgs.header.stamp > lastSentTime
       && rosCurPose.header.stamp > lastSentTime)
     {
+
       allowNewMsg = false;
       dqn_stage_ros::stage_message msg;
       msg.header.stamp = ros::Time::now();
