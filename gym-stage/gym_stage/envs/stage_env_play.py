@@ -23,13 +23,13 @@ pose_list = [[-17,6], [-17,1], [-17,-4], [-16,-9], [-13,3], [-13,-2], [-13,-6], 
 class StageEnvPlay(gym.Env):
   metadata = {'render.modes': ['human']}
 
-  def __init__(self, observation_dims=[42, 42]):
+  def __init__(self, observation_dims=[66, 66]):
     self.viewer = None
     self.observation_dims = observation_dims
     # action space: continious forward speed [0, 1.8] and turning speed [-1, 1] 
-    # self.action_space = spaces.Tuple(( spaces.Box( low=0, high=1.8, shape=1), spaces.Box( low=-1, high=1, shape=1))) 
+    self.action_space = spaces.Tuple(( spaces.Box( low=0, high=2.0, shape=1), spaces.Box( low=-1.0, high=1.0, shape=1))) 
     # self.action_space = spaces.MultiDiscrete( [ [0,3], [0,6]])
-    self.action_space = spaces.Discrete( 28)
+    # self.action_space = spaces.Discrete( 28)
     self.observation_space = spaces.Box(low=0, high=255, shape=( observation_dims[0], observation_dims[1], 1))
     self.screen = np.zeros((self.observation_dims[0],self.observation_dims[1]), np.uint8)
     self.robotPose = Pose()
@@ -51,8 +51,8 @@ class StageEnvPlay(gym.Env):
 
 
     #For babyStep training
-    self.r = 18
-    self.ang = np.pi*2
+    self.r = 1
+    self.ang = 0 #np.pi*2
 
   def initRos( self, robot_id):
     self.robot_id = robot_id
@@ -71,8 +71,8 @@ class StageEnvPlay(gym.Env):
 
   def _step(self, action):
     if self.terminal == False:
-      # self.actionToVel( action[0], action[1])
-      self.actionToVelDisc( action)
+      self.actionToVel( action[0], action[1])
+      # self.actionToVelDisc( action)
       self.readyForNewData = True
 
     dist = np.sqrt( (self.robotPose.position.x - self.goalPose.position.x)**2 + (self.robotPose.position.y - self.goalPose.position.y)**2)
@@ -83,18 +83,19 @@ class StageEnvPlay(gym.Env):
     reward = 0
     if dist < 0.3:
       reward += 1
-      self.selectNewGoal()
+      #self.chooseNewTarget()
       #rwd = Float64()
       #rwd.data = 10101.963
       #self.pub_rew_.publish( rwd)
-      #self.numWins += 1
-      #if self.numWins >= 99:
-      #  if self.r < 18:
-      #    self.r += 1
-      #  elif self.ang < 2*np.pi:
-      #    self.ang += 0.1
-      #  self.nimWins = 0
-      #self.resetStage()
+      self.selectNewGoal()
+      self.numWins += 1
+      if self.numWins >= 99:
+        if self.r < 18:
+          self.r += 1
+        elif self.ang < 2*np.pi:
+          self.ang += 0.1
+        self.nimWins = 0
+      self.resetStage()
     
     # Add whatever info you want
     info = {}
@@ -120,6 +121,7 @@ class StageEnvPlay(gym.Env):
     self.terminal = False
     self.sendTerminal = False
     self.selectNewGoal()
+    #self.chooseNewTarget()
     self.readyForNewData = False
     self.numWins = 0
     self.actionToVel( 0.0, 0.0)
@@ -142,6 +144,13 @@ class StageEnvPlay(gym.Env):
     rospy.signal_shutdown("Done")
 
   def selectNewGoal( self):
+    theta = self.ang*random.random()+(float(self.robot_id)*np.pi/4.0)
+    dist = random.random()*self.r
+    self.goalPose.position.x = dist*np.cos( theta)
+    self.goalPose.position.y = dist*np.sin( theta)
+    self.pub_goal_.publish( self.goalPose)
+
+  def chooseNewTarget( self):
     choice = random.choice( pose_list)
     self.goalPose.position.x = choice[0]
     self.goalPose.position.y = choice[1]
@@ -151,8 +160,8 @@ class StageEnvPlay(gym.Env):
     msg = Twist()
     msg.angular.x = 0
     msg.angular.y = 0
-    msg.angular.z = (float(turn) - 3.0) / 3
-    msg.linear.x = forward * 0.3
+    msg.angular.z = turn
+    msg.linear.x = forward+1
     msg.linear.y = 0
     msg.linear.z = 0
     self.pub_vel_.publish( msg)
@@ -186,7 +195,7 @@ class StageEnvPlay(gym.Env):
     y = self.observation_dims[1]/2
     
     # Occupancy grid:
-    c = 5.25
+    c = 5.125
     rad = int(data.laser.range_max*c)
     for i in range(0, 360):
       for j in range( 0, rad):
