@@ -42,18 +42,16 @@ def categorical_sample(logits, d):
     value = tf.squeeze(tf.multinomial(logits - tf.reduce_max(logits, [1], keep_dims=True), 1), [1])
     return tf.one_hot(value, d)
 
-from IPython.core.debugger import Tracer
 class LSTMPolicy(object):
     def __init__(self, ob_space, ac_space):
         self.x = x = tf.placeholder(tf.float32, [None] + list(ob_space))
 
-        x = tf.nn.elu(conv2d(x, 32, "l1", [3, 3], pad="VALID"))
-        for i in range(1,5):
-          x = tf.nn.elu(conv2d(x, 32, "l{}".format(i + 1), [3, 3], [2, 2]))
+        for i in range(4):
+            x = tf.nn.elu(conv2d(x, 32, "l{}".format(i + 1), [3, 3], [2, 2]))
         # introduce a "fake" batch dimension of 1 after flatten so that we can do LSTM over time dim
         x = tf.expand_dims(flatten(x), [0])
 
-        size = 512
+        size = 256
         lstm = rnn.BasicLSTMCell(size, state_is_tuple=True)
         self.state_size = lstm.state_size
         step_size = tf.shape(self.x)[:1]
@@ -71,41 +69,16 @@ class LSTMPolicy(object):
             time_major=False)
         lstm_c, lstm_h = lstm_state
         x = tf.reshape(lstm_outputs, [-1, size])
-
-        # self.mu = tf.contrib.layers.fully_connected(
-        #         inputs=x,
-        #         num_outputs=len(ac_space.spaces),
-        #         activation_fn=tf.tanh,
-        #         weights_initializer=tf.zeros_initializer)
-        self.mu = tf.layers.dense( 
-                inputs=x,
-                units=len(ac_space.spaces),
-                activation=tf.tanh,
-                kernel_initializer=None)
-        self.mu = tf.squeeze(self.mu)
-
-        # self.sigma = tf.contrib.layers.fully_connected(
-        #         inputs=x,
-        #         num_outputs=len(ac_space.spaces), 
-        #         activation_fn=tf.tanh,
-        #         weights_initializer=tf.zeros_initializer)
-        self.sigma = tf.layers.dense( 
-                inputs=x,
-                units=len(ac_space.spaces),
-                activation=tf.tanh,
-                kernel_initializer=None)
-        self.sigma = tf.squeeze(self.sigma)
-        self.sigma = tf.nn.softplus(self.sigma) + 1e-5
-        self.normal_dist = tf.contrib.distributions.Normal(self.mu, self.sigma)
-        self.sample = tf.squeeze(self.normal_dist.sample([1]))
-        self.sample = tf.clip_by_value(self.sample, -1.0, 1.0)
-        # check the action form tanh
-        # self.action = tf.clip_by_value(self.action, env.action_space.low[0], env.action_space.high[0])
-
+        self.logits = linear(x, ac_space, "action", normalized_columns_initializer(0.01))
         self.vf = tf.reshape(linear(x, 1, "value", normalized_columns_initializer(1.0)), [-1])
         self.state_out = [lstm_c[:1, :], lstm_h[:1, :]]
+        #self.sample = categorical_sample(self.logits, ac_space)[0, :]
+        self.reduce_max = tf.reduce_max(self.logits, [1], keep_dims=True)
+        self.multinomial = tf.multinomial(self.logits - self.reduce_max, 1)
+        self.value = tf.squeeze(self.multinomial)
+        self.sample = tf.one_hot(self.value, ac_space)[0: ]
+
         self.var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, tf.get_variable_scope().name)
-        # Tracer()()
 
     def get_initial_features(self):
         return self.state_init

@@ -47,7 +47,7 @@ floorplan
   name "blank"
   size [40.000 40.000 0.800]
   pose [0.000 0.000 0.000 0.000]
-  bitmap "rinkSFU.png"
+  bitmap "rink.png"
   obstacle_return 0
 
 )

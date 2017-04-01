@@ -43,13 +43,13 @@ def _process_stage_frame(frame):
     #frame = cv2.resize( frame, (42, 42))
     frame = frame.astype(np.float32)
     frame *= (1.0 / 255.0)
-    frame = np.reshape(frame, [42, 42, 1])
+    frame = np.reshape(frame, [66, 66, 1])
     return frame
 
 class StageRescale(vectorized.ObservationWrapper):
     def __init__(self, env=None):
         super(StageRescale, self).__init__(env)
-        self.observation_space = Box(0.0, 1.0, [42, 42, 1])
+        self.observation_space = Box(0.0, 1.0, [66, 66, 1])
 
     def _observation(self, observation_n):
         return [_process_stage_frame(observation) for observation in observation_n]
