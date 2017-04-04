@@ -198,10 +198,11 @@ should be computed.
             # loss of value function
             vf_loss = 0.5 * tf.reduce_sum(tf.square(pi.vf - self.r))
             # entropy = - tf.reduce_sum(prob_tf * log_prob_tf)
-            entropy = tf.reduce_sum(pi.normal_dist.entropy())
-
+            entropy1, entropy2 = tf.split(pi.normal_dist.entropy(),[1, 1],axis=1)
+            entropy1 = tf.reduce_sum(entropy1)
+            entropy2 = tf.reduce_sum(entropy2)
             bs = tf.to_float(tf.shape(pi.x)[0])
-            self.loss = pi_loss + 0.5 * vf_loss - entropy * 0.01
+            self.loss = pi_loss + 0.5 * vf_loss - entropy1 * 0.01 - entropy2 * 0.01
 
             # 20 represents the number of "local steps":  the number of timesteps
             # we run the policy before we update the parameters.
@@ -209,15 +210,31 @@ should be computed.
             # on the one hand;  but on the other hand, we get less frequent parameter updates, which
             # slows down learning.  In this code, we found that making local steps be much
             # smaller than 20 makes the algorithm more difficult to tune and to get to work.
-            self.runner = RunnerThread(env, pi, 30, visualise)
+            self.runner = RunnerThread(env, pi, 20, visualise)  
+            grads = tf.gradients(self.loss, pi.var_list)  
+            mu0,mu1 = tf.split(pi.mu,[1, 1],axis=1)
+            sigma0,sigma1 = tf.split(pi.sigma,[1, 1],axis=1)
 
-            grads = tf.gradients(self.loss, pi.var_list)
+            i = tf.split( pi.debug_image, 20, axis=0 )
+            j = tf.split( i[0], 32, axis=3)
+            k = []
+            k.append( tf.concat( j[0:8], 2))
+            k.append( tf.concat( j[8:16], 2))
+            k.append( tf.concat( j[16:24], 2))
+            k.append( tf.concat( j[24:32], 2))
+            img = tf.concat( k[:], 1)
 
             if use_tf12_api:
                 tf.summary.scalar("model/policy_loss", pi_loss / bs)
                 tf.summary.scalar("model/value_loss", vf_loss / bs)
-                tf.summary.scalar("model/entropy", entropy / bs)
+                tf.summary.scalar("model/entropy1", entropy1 / bs)
+                tf.summary.scalar("model/entropy2", entropy2 / bs)
+                tf.summary.scalar("model/mu0", tf.reduce_mean(mu0) / bs)
+                tf.summary.scalar("model/mu1", tf.reduce_mean(mu1) / bs)
+                tf.summary.scalar("model/sigma0", tf.reduce_mean(sigma0) / bs)
+                tf.summary.scalar("model/sigma1", tf.reduce_mean(sigma1) / bs)
                 tf.summary.image("model/state", pi.x)
+                tf.summary.image("model/conv", img)
                 tf.summary.scalar("model/grad_global_norm", tf.global_norm(grads))
                 tf.summary.scalar("model/var_global_norm", tf.global_norm(pi.var_list))
                 self.summary_op = tf.summary.merge_all()
@@ -225,7 +242,8 @@ should be computed.
             else:
                 tf.scalar_summary("model/policy_loss", pi_loss / bs)
                 tf.scalar_summary("model/value_loss", vf_loss / bs)
-                tf.scalar_summary("model/entropy", entropy / bs)
+                tf.scalar_summary("model/entropy1", entropy1 / bs)
+                tf.scalar_summary("model/entropy2", entropy2 / bs)
                 tf.image_summary("model/state", pi.x)
                 tf.image_summary("model/state", pi.l1)
                 tf.scalar_summary("model/grad_global_norm", tf.global_norm(grads))

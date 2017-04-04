@@ -79,10 +79,11 @@ class StageEnvPlay(gym.Env):
     #near obstacle penalty factor:
     #nearObstPenalty = self.minFrontDist - 1.5
     #reward = max( 0, ((self.prevDist - dist + 1.8)*3/dist)+min( 0, nearObstPenalty))
-    #self.prevDist = dist
-    reward = 0
+    #reward = 0
+    reward = (self.prevDist - dist)*3.0/dist
+    self.prevDist = dist
     if dist < 0.3:
-      reward += 1
+      reward += 30
       #self.chooseNewTarget()
       #rwd = Float64()
       #rwd.data = 10101.963
@@ -94,14 +95,14 @@ class StageEnvPlay(gym.Env):
           self.r += 1
         elif self.ang < 2*np.pi:
           self.ang += 0.1
-        self.nimWins = 0
+        self.numWins = 0
       self.resetStage()
     
     # Add whatever info you want
     info = {}
     self.ep_reward += reward
     if self.terminal == True:
-      reward = -1 
+      reward = -999 
       #rewd = Float64()
       #rewd.data = self.ep_reward
       #self.pub_rew_.publish( rewd)
@@ -111,7 +112,8 @@ class StageEnvPlay(gym.Env):
     while( self.readyForNewData == True):
       if rospy.get_rostime().secs - wait_from.secs > 1:
         wait_from = rospy.get_rostime()
-        self.actionToVelDisc( action)
+        self.actionToVel( action[0], action[1])
+        # self.actionToVelDisc( action)
       pass
 
     return self.screen, reward, self.sendTerminal, info
@@ -146,6 +148,7 @@ class StageEnvPlay(gym.Env):
   def selectNewGoal( self):
     theta = self.ang*random.random()+(float(self.robot_id)*np.pi/4.0)
     dist = random.random()*self.r
+    self.prevDist = dist
     self.goalPose.position.x = dist*np.cos( theta)
     self.goalPose.position.y = dist*np.sin( theta)
     self.pub_goal_.publish( self.goalPose)
@@ -195,7 +198,7 @@ class StageEnvPlay(gym.Env):
     y = self.observation_dims[1]/2
     
     # Occupancy grid:
-    c = 5.125
+    c = 6
     rad = int(data.laser.range_max*c)
     for i in range(0, 360):
       for j in range( 0, rad):

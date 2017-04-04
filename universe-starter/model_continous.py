@@ -48,6 +48,7 @@ class LSTMPolicy(object):
         self.x = x = tf.placeholder(tf.float32, [None] + list(ob_space))
 
         x = tf.nn.elu(conv2d(x, 32, "l1", [3, 3], pad="VALID"))
+        self.debug_image = x
         for i in range(1,5):
           x = tf.nn.elu(conv2d(x, 32, "l{}".format(i + 1), [3, 3], [2, 2]))
         # introduce a "fake" batch dimension of 1 after flatten so that we can do LSTM over time dim
@@ -81,7 +82,8 @@ class LSTMPolicy(object):
                 inputs=x,
                 units=len(ac_space.spaces),
                 activation=tf.tanh,
-                kernel_initializer=None)
+                kernel_initializer=None,
+                name="mu")
         self.mu = tf.squeeze(self.mu)
 
         # self.sigma = tf.contrib.layers.fully_connected(
@@ -93,7 +95,8 @@ class LSTMPolicy(object):
                 inputs=x,
                 units=len(ac_space.spaces),
                 activation=tf.tanh,
-                kernel_initializer=None)
+                kernel_initializer=None,
+                name="sigma")
         self.sigma = tf.squeeze(self.sigma)
         self.sigma = tf.nn.softplus(self.sigma) + 1e-5
         self.normal_dist = tf.contrib.distributions.Normal(self.mu, self.sigma)
