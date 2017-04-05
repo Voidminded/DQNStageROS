@@ -215,14 +215,50 @@ should be computed.
             mu0,mu1 = tf.split(pi.mu,[1, 1],axis=1)
             sigma0,sigma1 = tf.split(pi.sigma,[1, 1],axis=1)
 
-            i = tf.split( pi.debug_image, 20, axis=0 )
+            i = tf.split( pi.debug_image[0], 20, axis=0 )
             j = tf.split( i[0], 32, axis=3)
             k = []
             k.append( tf.concat( j[0:8], 2))
             k.append( tf.concat( j[8:16], 2))
             k.append( tf.concat( j[16:24], 2))
             k.append( tf.concat( j[24:32], 2))
-            img = tf.concat( k[:], 1)
+            img0 = tf.concat( k[:], 1)
+            
+            i = tf.split( pi.debug_image[1], 20, axis=0 )
+            j = tf.split( i[0], 32, axis=3)
+            k = []
+            k.append( tf.concat( j[0:8], 2))
+            k.append( tf.concat( j[8:16], 2))
+            k.append( tf.concat( j[16:24], 2))
+            k.append( tf.concat( j[24:32], 2))
+            img1 = tf.concat( k[:], 1)
+
+            i = tf.split( pi.debug_image[2], 20, axis=0 )
+            j = tf.split( i[0], 32, axis=3)
+            k = []
+            k.append( tf.concat( j[0:8], 2))
+            k.append( tf.concat( j[8:16], 2))
+            k.append( tf.concat( j[16:24], 2))
+            k.append( tf.concat( j[24:32], 2))
+            img2 = tf.concat( k[:], 1)
+
+            i = tf.split( pi.debug_image[3], 20, axis=0 )
+            j = tf.split( i[0], 32, axis=3)
+            k = []
+            k.append( tf.concat( j[0:8], 2))
+            k.append( tf.concat( j[8:16], 2))
+            k.append( tf.concat( j[16:24], 2))
+            k.append( tf.concat( j[24:32], 2))
+            img3 = tf.concat( k[:], 1)
+
+            i = tf.split( pi.debug_image[4], 20, axis=0 )
+            j = tf.split( i[0], 32, axis=3)
+            k = []
+            k.append( tf.concat( j[0:8], 2))
+            k.append( tf.concat( j[8:16], 2))
+            k.append( tf.concat( j[16:24], 2))
+            k.append( tf.concat( j[24:32], 2))
+            img4 = tf.concat( k[:], 1)
 
             if use_tf12_api:
                 tf.summary.scalar("model/policy_loss", pi_loss / bs)
@@ -234,7 +270,11 @@ should be computed.
                 tf.summary.scalar("model/sigma0", tf.reduce_mean(sigma0) / bs)
                 tf.summary.scalar("model/sigma1", tf.reduce_mean(sigma1) / bs)
                 tf.summary.image("model/state", pi.x)
-                tf.summary.image("model/conv", img)
+                tf.summary.image("model/conv0", img0)
+                tf.summary.image("model/conv1", img1)
+                tf.summary.image("model/conv2", img2)
+                tf.summary.image("model/conv3", img3)
+                tf.summary.image("model/conv4", img4)
                 tf.summary.scalar("model/grad_global_norm", tf.global_norm(grads))
                 tf.summary.scalar("model/var_global_norm", tf.global_norm(pi.var_list))
                 self.summary_op = tf.summary.merge_all()

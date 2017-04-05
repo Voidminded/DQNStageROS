@@ -46,11 +46,12 @@ from IPython.core.debugger import Tracer
 class LSTMPolicy(object):
     def __init__(self, ob_space, ac_space):
         self.x = x = tf.placeholder(tf.float32, [None] + list(ob_space))
-
+        self.debug_image=[]
         x = tf.nn.elu(conv2d(x, 32, "l1", [3, 3], pad="VALID"))
-        self.debug_image = x
+        self.debug_image.append(x)
         for i in range(1,5):
           x = tf.nn.elu(conv2d(x, 32, "l{}".format(i + 1), [3, 3], [2, 2]))
+          self.debug_image.append(x)
         # introduce a "fake" batch dimension of 1 after flatten so that we can do LSTM over time dim
         x = tf.expand_dims(flatten(x), [0])
 
