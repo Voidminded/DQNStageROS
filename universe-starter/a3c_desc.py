@@ -2,7 +2,7 @@ from __future__ import print_function
 from collections import namedtuple
 import numpy as np
 import tensorflow as tf
-from model_continous import LSTMPolicy
+from model import LSTMPolicy
 import six.moves.queue as queue
 import scipy.signal
 import threading
@@ -29,7 +29,6 @@ given a rollout, compute its returns and the advantage
     batch_adv = discount(delta_t, gamma * lambda_)
 
     features = rollout.features[0]
-
     return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features)
 
 Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "features"])
@@ -103,6 +102,7 @@ that would constantly interact with the environment and tell it what to do.  Thi
             self.queue.put(next(rollout_provider), timeout=600.0)
 
 
+
 def env_runner(env, policy, num_local_steps, summary_writer, render):
     """
 The logic of the thread runner.  In brief, it constantly keeps on running
@@ -122,7 +122,7 @@ runner appends the policy to the queue.
             fetched = policy.act(last_state, *last_features)
             action, value_, features = fetched[0], fetched[1], fetched[2:]
             # argmax to convert from one-hot
-            state, reward, terminal, info = env.step(action)
+            state, reward, terminal, info = env.step(action.argmax())
             if render:
                 env.render()
 
@@ -172,38 +172,33 @@ should be computed.
         worker_device = "/job:worker/task:{}/cpu:0".format(task)
         with tf.device(tf.train.replica_device_setter(1, worker_device=worker_device)):
             with tf.variable_scope("global"):
-                self.network = LSTMPolicy(env.observation_space.shape, env.action_space)
+                self.network = LSTMPolicy(env.observation_space.shape, env.action_space.n)
                 self.global_step = tf.get_variable("global_step", [], tf.int32, initializer=tf.constant_initializer(0, dtype=tf.int32),
                                                    trainable=False)
 
         with tf.device(worker_device):
             with tf.variable_scope("local"):
-                self.local_network = pi = LSTMPolicy(env.observation_space.shape, env.action_space)
+                self.local_network = pi = LSTMPolicy(env.observation_space.shape, env.action_space.n)
                 pi.global_step = self.global_step
 
-            # TODO plase check ac
-            self.ac = tf.placeholder(tf.float32, [None, len( env.action_space.spaces)], name="ac")
+            self.ac = tf.placeholder(tf.float32, [None, env.action_space.n], name="ac")
             self.adv = tf.placeholder(tf.float32, [None], name="adv")
             self.r = tf.placeholder(tf.float32, [None], name="r")
 
-            #log_prob_tf = tf.nn.log_softmax(pi.logits)
-             #prob_tf = tf.nn.softmax(pi.logits)
+            log_prob_tf = tf.nn.log_softmax(pi.logits)
+            prob_tf = tf.nn.softmax(pi.logits)
 
             # the "policy gradients" loss:  its derivative is precisely the policy gradient
             # notice that self.ac is a placeholder that is provided externally.
             # adv will contain the advantages, as calculated in process_rollout
-            # pi_loss = - tf.reduce_sum(tf.reduce_sum(log_prob_tf * self.ac, [1]) * self.adv)
-            pi_loss = -tf.reduce_sum(tf.reduce_sum(pi.normal_dist.log_prob(pi.sample)) * self.adv)
-            # pi_loss = -tf.reduce_sum(tf.reduce_sum(log_prob_tf * self.ac, [1]) * self.adv)
+            pi_loss = - tf.reduce_sum(tf.reduce_sum(log_prob_tf * self.ac, [1]) * self.adv)
+
             # loss of value function
             vf_loss = 0.5 * tf.reduce_sum(tf.square(pi.vf - self.r))
-            # entropy = - tf.reduce_sum(prob_tf * log_prob_tf)
-            #entropy1, entropy2 = tf.split(pi.normal_dist.entropy(),[1, 1],axis=1)
-            entropy1= entropy2 = tf.reduce_sum(pi.normal_dist.entropy())
-            entropy1 = tf.reduce_sum(entropy1)
-            entropy2 = tf.reduce_sum(entropy2)
+            entropy = - tf.reduce_sum(prob_tf * log_prob_tf)
+
             bs = tf.to_float(tf.shape(pi.x)[0])
-            self.loss = pi_loss + 0.5 * vf_loss - entropy1 * 0.3 - entropy2 * 0.3
+            self.loss = pi_loss + 0.5 * vf_loss - entropy * 0.01
 
             # 20 represents the number of "local steps":  the number of timesteps
             # we run the policy before we update the parameters.
@@ -211,71 +206,69 @@ should be computed.
             # on the one hand;  but on the other hand, we get less frequent parameter updates, which
             # slows down learning.  In this code, we found that making local steps be much
             # smaller than 20 makes the algorithm more difficult to tune and to get to work.
-            self.runner = RunnerThread(env, pi, 20, visualise)  
-            grads = tf.gradients(self.loss, pi.var_list)  
-            mu0,mu1 = tf.split(pi.mu,[1, 1],axis=1)
-            sigma0,sigma1 = tf.split(pi.sigma,[1, 1],axis=1)
+            self.runner = RunnerThread(env, pi, 20, visualise)
 
-            i = tf.split( pi.debug_image[0], 20, axis=0 )
-            j = tf.split( i[0], 32, axis=3)
-            k = []
-            k.append( tf.concat( j[0:8], 2))
-            k.append( tf.concat( j[8:16], 2))
-            k.append( tf.concat( j[16:24], 2))
-            k.append( tf.concat( j[24:32], 2))
-            img0 = tf.concat( k[:], 1)
+
+            grads = tf.gradients(self.loss, pi.var_list)
             
-            i = tf.split( pi.debug_image[1], 20, axis=0 )
-            j = tf.split( i[0], 32, axis=3)
-            k = []
-            k.append( tf.concat( j[0:8], 2))
-            k.append( tf.concat( j[8:16], 2))
-            k.append( tf.concat( j[16:24], 2))
-            k.append( tf.concat( j[24:32], 2))
-            img1 = tf.concat( k[:], 1)
+            try:
+              i = tf.split( pi.debug_image[0], 20, axis=0 )
+              j = tf.split( i[0], 32, axis=3)
+              k = []
+              k.append( tf.concat( j[0:8], 2))
+              k.append( tf.concat( j[8:16], 2))
+              k.append( tf.concat( j[16:24], 2))
+              k.append( tf.concat( j[24:32], 2))
+              img0 = tf.concat( k[:], 1)
+              
+              i = tf.split( pi.debug_image[1], 20, axis=0 )
+              j = tf.split( i[0], 32, axis=3)
+              k = []
+              k.append( tf.concat( j[0:8], 2))
+              k.append( tf.concat( j[8:16], 2))
+              k.append( tf.concat( j[16:24], 2))
+              k.append( tf.concat( j[24:32], 2))
+              img1 = tf.concat( k[:], 1)
 
-            i = tf.split( pi.debug_image[2], 20, axis=0 )
-            j = tf.split( i[0], 32, axis=3)
-            k = []
-            k.append( tf.concat( j[0:8], 2))
-            k.append( tf.concat( j[8:16], 2))
-            k.append( tf.concat( j[16:24], 2))
-            k.append( tf.concat( j[24:32], 2))
-            img2 = tf.concat( k[:], 1)
+              i = tf.split( pi.debug_image[2], 20, axis=0 )
+              j = tf.split( i[0], 32, axis=3)
+              k = []
+              k.append( tf.concat( j[0:8], 2))
+              k.append( tf.concat( j[8:16], 2))
+              k.append( tf.concat( j[16:24], 2))
+              k.append( tf.concat( j[24:32], 2))
+              img2 = tf.concat( k[:], 1)
 
-            i = tf.split( pi.debug_image[3], 20, axis=0 )
-            j = tf.split( i[0], 32, axis=3)
-            k = []
-            k.append( tf.concat( j[0:8], 2))
-            k.append( tf.concat( j[8:16], 2))
-            k.append( tf.concat( j[16:24], 2))
-            k.append( tf.concat( j[24:32], 2))
-            img3 = tf.concat( k[:], 1)
+              i = tf.split( pi.debug_image[3], 20, axis=0 )
+              j = tf.split( i[0], 32, axis=3)
+              k = []
+              k.append( tf.concat( j[0:8], 2))
+              k.append( tf.concat( j[8:16], 2))
+              k.append( tf.concat( j[16:24], 2))
+              k.append( tf.concat( j[24:32], 2))
+              img3 = tf.concat( k[:], 1)
 
-            i = tf.split( pi.debug_image[4], 20, axis=0 )
-            j = tf.split( i[0], 32, axis=3)
-            k = []
-            k.append( tf.concat( j[0:8], 2))
-            k.append( tf.concat( j[8:16], 2))
-            k.append( tf.concat( j[16:24], 2))
-            k.append( tf.concat( j[24:32], 2))
-            img4 = tf.concat( k[:], 1)
+              i = tf.split( pi.debug_image[4], 20, axis=0 )
+              j = tf.split( i[0], 32, axis=3)
+              k = []
+              k.append( tf.concat( j[0:8], 2))
+              k.append( tf.concat( j[8:16], 2))
+              k.append( tf.concat( j[16:24], 2))
+              k.append( tf.concat( j[24:32], 2))
+              img4 = tf.concat( k[:], 1)
+              tf.summary.image("model/conv0", img0)
+              tf.summary.image("model/conv1", img1)
+              tf.summary.image("model/conv2", img2)
+              tf.summary.image("model/conv3", img3)
+              tf.summary.image("model/conv4", img4)
+            except:
+              print( "The input image wash F#@*%$ up")
 
             if use_tf12_api:
                 tf.summary.scalar("model/policy_loss", pi_loss / bs)
                 tf.summary.scalar("model/value_loss", vf_loss / bs)
-                tf.summary.scalar("model/entropy1", entropy1 / bs)
-                tf.summary.scalar("model/entropy2", entropy2 / bs)
-                tf.summary.scalar("model/mu0", tf.reduce_mean(mu0) / bs)
-                tf.summary.scalar("model/mu1", tf.reduce_mean(mu1) / bs)
-                tf.summary.scalar("model/sigma0", tf.reduce_mean(sigma0) / bs)
-                tf.summary.scalar("model/sigma1", tf.reduce_mean(sigma1) / bs)
+                tf.summary.scalar("model/entropy", entropy / bs)
                 tf.summary.image("model/state", pi.x)
-                tf.summary.image("model/conv0", img0)
-                tf.summary.image("model/conv1", img1)
-                tf.summary.image("model/conv2", img2)
-                tf.summary.image("model/conv3", img3)
-                tf.summary.image("model/conv4", img4)
                 tf.summary.scalar("model/grad_global_norm", tf.global_norm(grads))
                 tf.summary.scalar("model/var_global_norm", tf.global_norm(pi.var_list))
                 self.summary_op = tf.summary.merge_all()
@@ -283,10 +276,8 @@ should be computed.
             else:
                 tf.scalar_summary("model/policy_loss", pi_loss / bs)
                 tf.scalar_summary("model/value_loss", vf_loss / bs)
-                tf.scalar_summary("model/entropy1", entropy1 / bs)
-                tf.scalar_summary("model/entropy2", entropy2 / bs)
+                tf.scalar_summary("model/entropy", entropy / bs)
                 tf.image_summary("model/state", pi.x)
-                tf.image_summary("model/state", pi.l1)
                 tf.scalar_summary("model/grad_global_norm", tf.global_norm(grads))
                 tf.scalar_summary("model/var_global_norm", tf.global_norm(pi.var_list))
                 self.summary_op = tf.merge_all_summaries()
