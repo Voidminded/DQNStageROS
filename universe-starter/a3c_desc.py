@@ -211,58 +211,58 @@ should be computed.
 
             grads = tf.gradients(self.loss, pi.var_list)
             
-            try:
-              i = tf.split( pi.debug_image[0], 20, axis=0 )
-              j = tf.split( i[0], 32, axis=3)
-              k = []
-              k.append( tf.concat( j[0:8], 2))
-              k.append( tf.concat( j[8:16], 2))
-              k.append( tf.concat( j[16:24], 2))
-              k.append( tf.concat( j[24:32], 2))
-              img0 = tf.concat( k[:], 1)
-              
-              i = tf.split( pi.debug_image[1], 20, axis=0 )
-              j = tf.split( i[0], 32, axis=3)
-              k = []
-              k.append( tf.concat( j[0:8], 2))
-              k.append( tf.concat( j[8:16], 2))
-              k.append( tf.concat( j[16:24], 2))
-              k.append( tf.concat( j[24:32], 2))
-              img1 = tf.concat( k[:], 1)
-
-              i = tf.split( pi.debug_image[2], 20, axis=0 )
-              j = tf.split( i[0], 32, axis=3)
-              k = []
-              k.append( tf.concat( j[0:8], 2))
-              k.append( tf.concat( j[8:16], 2))
-              k.append( tf.concat( j[16:24], 2))
-              k.append( tf.concat( j[24:32], 2))
-              img2 = tf.concat( k[:], 1)
-
-              i = tf.split( pi.debug_image[3], 20, axis=0 )
-              j = tf.split( i[0], 32, axis=3)
-              k = []
-              k.append( tf.concat( j[0:8], 2))
-              k.append( tf.concat( j[8:16], 2))
-              k.append( tf.concat( j[16:24], 2))
-              k.append( tf.concat( j[24:32], 2))
-              img3 = tf.concat( k[:], 1)
-
-              i = tf.split( pi.debug_image[4], 20, axis=0 )
-              j = tf.split( i[0], 32, axis=3)
-              k = []
-              k.append( tf.concat( j[0:8], 2))
-              k.append( tf.concat( j[8:16], 2))
-              k.append( tf.concat( j[16:24], 2))
-              k.append( tf.concat( j[24:32], 2))
-              img4 = tf.concat( k[:], 1)
-              tf.summary.image("model/conv0", img0)
-              tf.summary.image("model/conv1", img1)
-              tf.summary.image("model/conv2", img2)
-              tf.summary.image("model/conv3", img3)
-              tf.summary.image("model/conv4", img4)
-            except:
-              print( "The input image wash F#@*%$ up")
+#            try:
+#              i = tf.split( pi.debug_image[0], 20, axis=0 )
+#              j = tf.split( i[0], 32, axis=3)
+#              k = []
+#              k.append( tf.concat( j[0:8], 2))
+#              k.append( tf.concat( j[8:16], 2))
+#              k.append( tf.concat( j[16:24], 2))
+#              k.append( tf.concat( j[24:32], 2))
+#              img0 = tf.concat( k[:], 1)
+#              
+#              i = tf.split( pi.debug_image[1], 20, axis=0 )
+#              j = tf.split( i[0], 32, axis=3)
+#              k = []
+#              k.append( tf.concat( j[0:8], 2))
+#              k.append( tf.concat( j[8:16], 2))
+#              k.append( tf.concat( j[16:24], 2))
+#              k.append( tf.concat( j[24:32], 2))
+#              img1 = tf.concat( k[:], 1)
+#
+#              i = tf.split( pi.debug_image[2], 20, axis=0 )
+#              j = tf.split( i[0], 32, axis=3)
+#              k = []
+#              k.append( tf.concat( j[0:8], 2))
+#              k.append( tf.concat( j[8:16], 2))
+#              k.append( tf.concat( j[16:24], 2))
+#              k.append( tf.concat( j[24:32], 2))
+#              img2 = tf.concat( k[:], 1)
+#
+#              i = tf.split( pi.debug_image[3], 20, axis=0 )
+#              j = tf.split( i[0], 32, axis=3)
+#              k = []
+#              k.append( tf.concat( j[0:8], 2))
+#              k.append( tf.concat( j[8:16], 2))
+#              k.append( tf.concat( j[16:24], 2))
+#              k.append( tf.concat( j[24:32], 2))
+#              img3 = tf.concat( k[:], 1)
+#
+#              i = tf.split( pi.debug_image[4], 20, axis=0 )
+#              j = tf.split( i[0], 32, axis=3)
+#              k = []
+#              k.append( tf.concat( j[0:8], 2))
+#              k.append( tf.concat( j[8:16], 2))
+#              k.append( tf.concat( j[16:24], 2))
+#              k.append( tf.concat( j[24:32], 2))
+#              img4 = tf.concat( k[:], 1)
+#              tf.summary.image("model/conv0", img0)
+#              tf.summary.image("model/conv1", img1)
+#              tf.summary.image("model/conv2", img2)
+#              tf.summary.image("model/conv3", img3)
+#              tf.summary.image("model/conv4", img4)
+#            except:
+#              print( "The input image wash F#@*%$ up")
 
             if use_tf12_api:
                 tf.summary.scalar("model/policy_loss", pi_loss / bs)
